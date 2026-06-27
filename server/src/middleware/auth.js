@@ -24,6 +24,11 @@ const protect = async (req, res, next) => {
       return ApiResponse.unauthorized(res, 'User no longer exists');
     }
 
+    // Session token check for single device login validation
+    if (decoded.sessionToken && user.currentSessionToken && decoded.sessionToken !== user.currentSessionToken) {
+      return ApiResponse.unauthorized(res, 'Your account was logged in on another device. Please log in again.');
+    }
+
     if (!user.isActive) {
       return ApiResponse.forbidden(res, 'Your account has been suspended');
     }
@@ -54,7 +59,10 @@ const optionalAuth = async (req, res, next) => {
       const decoded = verifyAccessToken(token);
       const user = await User.findById(decoded.id).select('-password -refreshToken');
       if (user && user.isActive) {
-        req.user = user;
+        // Only set req.user if session token matches
+        if (!decoded.sessionToken || !user.currentSessionToken || decoded.sessionToken === user.currentSessionToken) {
+          req.user = user;
+        }
       }
     }
   } catch (err) {}

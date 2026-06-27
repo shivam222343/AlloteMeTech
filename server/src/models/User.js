@@ -25,6 +25,13 @@ const userSchema = new mongoose.Schema(
     badges: [{ name: String, earnedAt: Date }],
     forgotPasswordToken: { type: String, select: false },
     forgotPasswordExpire: { type: Date, select: false },
+    isPremium: { type: Boolean, default: false },
+    premiumExpiresAt: { type: Date, default: null },
+    premiumOrderId: { type: String, default: null },
+    premiumPaymentId: { type: String, default: null },
+    currentSessionToken: { type: String, default: null },
+
+
   },
   { timestamps: true }
 );

@@ -21,6 +21,7 @@ const searchRoutes = require('./routes/search');
 const progressRoutes = require('./routes/progress');
 const adminRoutes = require('./routes/admin');
 const githubRoutes = require('./routes/githubRoutes');
+const discussionRoutes = require('./routes/discussion');
 const githubScheduler = require('./github/github.scheduler');
 
 // Connect DB
@@ -97,6 +98,9 @@ app.use('/api/search', searchRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/github', githubRoutes);
+app.use('/api/discussion', discussionRoutes);
+app.use('/api/payment', require('./routes/payment'));
+
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
@@ -150,13 +154,58 @@ const io = new Server(server, {
 
 app.set('io', io);
 
+const activeConnections = new Map(); // socket.id -> userId (or 'guest')
+const typingUsers = new Map(); // socket.id -> { userId, name }
+
 io.on('connection', (socket) => {
-  // Join a room based on userId (passed in query)
   const userId = socket.handshake.query.userId;
+  activeConnections.set(socket.id, userId || 'guest');
+
+  const getOnlineCount = () => {
+    const uniqueUsers = new Set();
+    let guestCount = 0;
+    for (const val of activeConnections.values()) {
+      if (val === 'guest') {
+        guestCount++;
+      } else {
+        uniqueUsers.add(val);
+      }
+    }
+    return uniqueUsers.size + guestCount;
+  };
+
+  // Broadcast online count to everyone
+  io.emit('discussion:online_count', getOnlineCount());
+
+  // Allow client to request current count immediately on mount
+  socket.on('discussion:get_online_count', () => {
+    socket.emit('discussion:online_count', getOnlineCount());
+  });
+
   if (userId) {
     socket.join(userId);
   }
-  socket.on('disconnect', () => {});
+
+  socket.on('discussion:typing:start', (payload) => {
+    if (payload?.userId && payload?.name) {
+      typingUsers.set(socket.id, { userId: payload.userId, name: payload.name });
+      io.emit('discussion:typing:update', Array.from(typingUsers.values()));
+    }
+  });
+
+  socket.on('discussion:typing:stop', () => {
+    if (typingUsers.has(socket.id)) {
+      typingUsers.delete(socket.id);
+      io.emit('discussion:typing:update', Array.from(typingUsers.values()));
+    }
+  });
+
+  socket.on('disconnect', () => {
+    activeConnections.delete(socket.id);
+    typingUsers.delete(socket.id);
+    io.emit('discussion:online_count', getOnlineCount());
+    io.emit('discussion:typing:update', Array.from(typingUsers.values()));
+  });
 });
 
 const PORT = process.env.PORT || 5000;

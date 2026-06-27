@@ -68,17 +68,48 @@ exports.getTopicProblems = async (req, res) => {
     .lean();
 
   const cpMap = {};
+  const problemTimeRanges = {}; // Track all timeRanges associated with each problem
   for (const cp of companyProblems) {
     if (!cp.company) continue;
     const pId = cp.problem.toString();
+    
+    if (!problemTimeRanges[pId]) {
+      problemTimeRanges[pId] = new Set();
+    }
+    if (cp.timeRange) {
+      problemTimeRanges[pId].add(cp.timeRange);
+    }
+
     if (!cpMap[pId]) cpMap[pId] = [];
-    // Deduplicate by company since same problem might have multiple timeRanges
     const existing = cpMap[pId].find(c => c.company._id.toString() === cp.company._id.toString());
     if (!existing) cpMap[pId].push(cp);
   }
 
+  // Get premium status of user securely
+  let isPremiumUser = false;
+  if (req.user) {
+    const User = require('../models/User');
+    const user = await User.findById(req.user._id).lean();
+    if (user && user.isPremium && user.premiumExpiresAt && new Date(user.premiumExpiresAt) > new Date()) {
+      isPremiumUser = true;
+    }
+  }
+
   problems.forEach(p => {
-    p.companies = cpMap[p._id.toString()] || [];
+    const pId = p._id.toString();
+    p.companies = cpMap[pId] || [];
+
+    // Requires premium if asked in 30_DAYS (30d) or 3_MONTHS (90d)
+    const ranges = problemTimeRanges[pId] || new Set();
+    const requiresPremium = ranges.has('30_DAYS') || ranges.has('3_MONTHS');
+    const isLocked = requiresPremium && !isPremiumUser;
+
+    p.isLocked = isLocked;
+    p.timeRanges = Array.from(ranges);
+    if (isLocked) {
+      p.leetcodeUrl = null;
+      p.leetcodeId = null;
+    }
   });
 
   return ApiResponse.paginated(

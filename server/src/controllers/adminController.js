@@ -66,6 +66,20 @@ exports.deleteCompany = async (req, res) => {
 };
 
 // ─── Problems Management ──────────────────────────────────────────────────────
+exports.getProblems = async (req, res) => {
+  const { page = 1, limit = 20, search, difficulty } = req.query;
+  const query = { isActive: true };
+  if (search) query.$or = [{ title: new RegExp(search, 'i') }, { slug: new RegExp(search, 'i') }];
+  if (difficulty) query.difficulty = difficulty;
+
+  const skip = (page - 1) * limit;
+  const [problems, total] = await Promise.all([
+    Problem.find(query).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+    Problem.countDocuments(query),
+  ]);
+  return ApiResponse.paginated(res, problems, { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / limit) });
+};
+
 exports.createProblem = async (req, res) => {
   const problem = await Problem.create(req.body);
   // If manual creation from admin panel supports companies, it should insert to CompanyProblem now.
@@ -89,6 +103,19 @@ exports.deleteProblem = async (req, res) => {
 };
 
 // ─── Topics Management ────────────────────────────────────────────────────────
+exports.getTopics = async (req, res) => {
+  const { page = 1, limit = 20, search } = req.query;
+  const query = {};
+  if (search) query.name = new RegExp(search, 'i');
+
+  const skip = (page - 1) * limit;
+  const [topics, total] = await Promise.all([
+    Topic.find(query).sort({ name: 1 }).skip(skip).limit(Number(limit)).lean(),
+    Topic.countDocuments(query),
+  ]);
+  return ApiResponse.paginated(res, topics, { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / limit) });
+};
+
 exports.createTopic = async (req, res) => {
   const topic = await Topic.create(req.body);
   return ApiResponse.created(res, { topic }, 'Topic created');

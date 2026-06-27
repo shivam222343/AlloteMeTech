@@ -7,10 +7,15 @@ const {
   cookieOptions,
 } = require('../utils/jwt');
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
-const sendTokens = (res, user, statusCode = 200, message = 'Success') => {
-  const accessToken = generateAccessToken(user._id, user.role);
+const crypto = require('crypto');
 
+const sendTokens = async (res, user, statusCode = 200, message = 'Success') => {
+  const sessionToken = crypto.randomBytes(16).toString('hex');
+  user.currentSessionToken = sessionToken;
+  await user.save();
+
+  const accessToken = generateAccessToken(user._id, user.role, sessionToken);
+  const isPremium = !!(user.isPremium && user.premiumExpiresAt && new Date(user.premiumExpiresAt) > new Date());
   const userData = {
     _id: user._id,
     name: user.name,
@@ -19,6 +24,8 @@ const sendTokens = (res, user, statusCode = 200, message = 'Success') => {
     role: user.role,
     streak: user.streak,
     totalSolved: user.totalSolved,
+    isPremium,
+    premiumExpiresAt: user.premiumExpiresAt,
   };
 
   return ApiResponse.success(res, { user: userData, accessToken }, message, statusCode);
@@ -62,7 +69,12 @@ exports.login = async (req, res) => {
 exports.googleCallback = async (req, res) => {
   try {
     const user = req.user;
-    const accessToken = generateAccessToken(user._id, user.role);
+    const crypto = require('crypto');
+    const sessionToken = crypto.randomBytes(16).toString('hex');
+    user.currentSessionToken = sessionToken;
+    await user.save();
+
+    const accessToken = generateAccessToken(user._id, user.role, sessionToken);
 
     res.redirect(`${process.env.CLIENT_URL}/dashboard?token=${accessToken}`);
   } catch {
@@ -82,7 +94,7 @@ exports.refreshToken = async (req, res) => {
     return ApiResponse.unauthorized(res, 'Invalid refresh token');
   }
 
-  const newAccessToken = generateAccessToken(user._id, user.role);
+  const newAccessToken = generateAccessToken(user._id, user.role, user.currentSessionToken);
   res.cookie('accessToken', newAccessToken, {
     ...cookieOptions,
     maxAge: 15 * 60 * 1000,

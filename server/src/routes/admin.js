@@ -8,9 +8,11 @@ const {
   createCompany,
   updateCompany,
   deleteCompany,
+  getProblems,
   createProblem,
   updateProblem,
   deleteProblem,
+  getTopics,
   createTopic,
   updateTopic,
   deleteTopic,
@@ -35,11 +37,13 @@ router.put('/companies/:id', updateCompany);
 router.delete('/companies/:id', deleteCompany);
 
 // Problems
+router.get('/problems', getProblems);
 router.post('/problems', createProblem);
 router.put('/problems/:id', updateProblem);
 router.delete('/problems/:id', deleteProblem);
 
 // Topics
+router.get('/topics', getTopics);
 router.post('/topics', createTopic);
 router.put('/topics/:id', updateTopic);
 router.delete('/topics/:id', deleteTopic);

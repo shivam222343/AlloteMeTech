@@ -112,10 +112,12 @@ exports.getCompanyProblems = async (req, res) => {
   const matchQuery = { company: company._id };
 
   if (timeRange && timeRange !== 'all') {
-    const rangeMap = { '30d': '30_DAYS', '3m': '3_MONTHS', '6m': '6_MONTHS' };
-    const mappedRange = rangeMap[timeRange];
-    if (mappedRange) {
-      matchQuery.timeRange = mappedRange;
+    if (timeRange === '30d') {
+      matchQuery.timeRange = '30_DAYS';
+    } else if (timeRange === '3m') {
+      matchQuery.timeRange = { $in: ['30_DAYS', '3_MONTHS'] };
+    } else if (timeRange === '6m') {
+      matchQuery.timeRange = { $in: ['30_DAYS', '3_MONTHS', '6_MONTHS'] };
     }
   }
 
@@ -149,12 +151,13 @@ exports.getCompanyProblems = async (req, res) => {
     pipeline.push({ $match: { 'problemDoc.topics': new mongoose.Types.ObjectId(topic) } });
   }
 
-  // Group by problem to remove duplicates from different timeRanges, taking max frequency
+  // Group by problem to remove duplicates from different timeRanges, taking max frequency and collecting time ranges
   pipeline.push({
     $group: {
       _id: '$problemDoc._id',
       problemDoc: { $first: '$problemDoc' },
-      frequency: { $max: '$frequency' }
+      frequency: { $max: '$frequency' },
+      timeRanges: { $addToSet: '$timeRange' }
     }
   });
 
@@ -205,12 +208,31 @@ exports.getCompanyProblems = async (req, res) => {
     if (!existing) cpMap[pId].push(cp);
   }
 
+  // Get active premium status for the user securely
+  let isPremiumUser = false;
+  if (req.user) {
+    const User = require('../models/User');
+    const user = await User.findById(req.user._id).lean();
+    if (user && user.isPremium && user.premiumExpiresAt && new Date(user.premiumExpiresAt) > new Date()) {
+      isPremiumUser = true;
+    }
+  }
+
   // Flatten the result to match frontend expectations
   const problems = mappings.map(m => {
+    // 30_DAYS (last 30 days) and 3_MONTHS (last 90 days, which covers 60 days) require premium
+    const requiresPremium = m.timeRanges && m.timeRanges.some(tr => tr === '30_DAYS' || tr === '3_MONTHS');
+    const isLocked = requiresPremium && !isPremiumUser;
+
     return {
       ...m.problemDoc,
       frequency: m.frequency,
-      companies: cpMap[m.problemDoc._id.toString()] || []
+      companies: cpMap[m.problemDoc._id.toString()] || [],
+      isLocked,
+      timeRanges: m.timeRanges,
+      // Strictly redact leetcode reference if locked to prevent client-side inspect bypasses
+      leetcodeUrl: isLocked ? null : m.problemDoc.leetcodeUrl,
+      leetcodeId: isLocked ? null : m.problemDoc.leetcodeId,
     };
   });
 

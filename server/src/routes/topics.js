@@ -5,6 +5,7 @@ const { optionalAuth } = require('../middleware/auth');
 
 router.get('/', optionalAuth, getTopics);
 router.get('/:slug', optionalAuth, getTopic);
-router.get('/:slug/problems', getTopicProblems);
+router.get('/:slug/problems', optionalAuth, getTopicProblems);
 
 module.exports = router;
+
