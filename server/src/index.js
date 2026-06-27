@@ -27,6 +27,7 @@ const githubScheduler = require('./github/github.scheduler');
 connectDB();
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (Render) to fix rate limiting
 
 // ─── Security Middleware ──────────────────────────────────────────────────────
 app.use(helmet({
