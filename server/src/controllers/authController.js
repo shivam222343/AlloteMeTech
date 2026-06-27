@@ -117,8 +117,8 @@ exports.logout = async (req, res) => {
     await User.findOneAndUpdate({ refreshToken: token }, { refreshToken: null });
   }
 
-  res.clearCookie('accessToken');
-  res.clearCookie('refreshToken');
+  res.clearCookie('accessToken', cookieOptions);
+  res.clearCookie('refreshToken', cookieOptions);
   return ApiResponse.success(res, null, 'Logged out successfully');
 };
 

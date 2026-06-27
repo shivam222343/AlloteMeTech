@@ -33,8 +33,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    await authApi.logout();
-    setUser(null);
+    try {
+      await authApi.logout();
+    } catch (err) {
+      console.error('Logout failed on backend:', err);
+    } finally {
+      setUser(null);
+    }
   };
 
   const isAdmin = user?.role === 'admin';
