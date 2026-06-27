@@ -22,8 +22,8 @@ const verifyRefreshToken = (token) => {
 
 const cookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  secure: true, // Always true for cross-origin over HTTPS
+  sameSite: 'none', // Always 'none' for cross-origin
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
