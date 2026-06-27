@@ -44,7 +44,7 @@ const Login = () => {
             <img
               src="/AlloteMe_Logos.png"
               alt="AlloteMe Tech"
-              className="h-10 w-auto object-contain mx-auto"
+              className="h-20 w-auto object-contain mx-auto"
             />
           </Link>
           <h1 className="text-xl font-bold text-text-primary">Sign in to AlloteMe Tech</h1>
