@@ -10,16 +10,6 @@ const {
 // ─── Helper ───────────────────────────────────────────────────────────────────
 const sendTokens = (res, user, statusCode = 200, message = 'Success') => {
   const accessToken = generateAccessToken(user._id, user.role);
-  const refreshToken = generateRefreshToken(user._id);
-
-  // Save refresh token to DB
-  User.findByIdAndUpdate(user._id, { refreshToken }).exec();
-
-  res.cookie('refreshToken', refreshToken, cookieOptions);
-  res.cookie('accessToken', accessToken, {
-    ...cookieOptions,
-    maxAge: 15 * 60 * 1000, // 15 min
-  });
 
   const userData = {
     _id: user._id,
@@ -73,17 +63,8 @@ exports.googleCallback = async (req, res) => {
   try {
     const user = req.user;
     const accessToken = generateAccessToken(user._id, user.role);
-    const refreshToken = generateRefreshToken(user._id);
 
-    await User.findByIdAndUpdate(user._id, { refreshToken });
-
-    res.cookie('refreshToken', refreshToken, cookieOptions);
-    res.cookie('accessToken', accessToken, {
-      ...cookieOptions,
-      maxAge: 15 * 60 * 1000,
-    });
-
-    res.redirect(`${process.env.CLIENT_URL}/dashboard?auth=success`);
+    res.redirect(`${process.env.CLIENT_URL}/dashboard?token=${accessToken}`);
   } catch {
     res.redirect(`${process.env.CLIENT_URL}/login?error=oauth_failed`);
   }
@@ -112,13 +93,7 @@ exports.refreshToken = async (req, res) => {
 
 // ─── Logout ───────────────────────────────────────────────────────────────────
 exports.logout = async (req, res) => {
-  const token = req.cookies?.refreshToken;
-  if (token) {
-    await User.findOneAndUpdate({ refreshToken: token }, { refreshToken: null });
-  }
-
-  res.clearCookie('accessToken', cookieOptions);
-  res.clearCookie('refreshToken', cookieOptions);
+  // Since we're using JWTs in LocalStorage, logout is primarily a frontend action.
   return ApiResponse.success(res, null, 'Logged out successfully');
 };
 

@@ -9,25 +9,39 @@ export const AuthProvider = ({ children }) => {
 
   const fetchMe = useCallback(async () => {
     try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('No token');
       const { data } = await authApi.getMe();
       setUser(data.data.user);
     } catch {
       setUser(null);
+      localStorage.removeItem('token');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchMe(); }, [fetchMe]);
+  useEffect(() => {
+    // Check for Google OAuth token in URL
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('token');
+    if (urlToken) {
+      localStorage.setItem('token', urlToken);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    fetchMe();
+  }, [fetchMe]);
 
   const login = async (credentials) => {
     const { data } = await authApi.login(credentials);
+    if (data.data.accessToken) localStorage.setItem('token', data.data.accessToken);
     setUser(data.data.user);
     return data.data.user;
   };
 
   const register = async (formData) => {
     const { data } = await authApi.register(formData);
+    if (data.data.accessToken) localStorage.setItem('token', data.data.accessToken);
     setUser(data.data.user);
     return data.data.user;
   };
@@ -39,6 +53,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Logout failed on backend:', err);
     } finally {
       setUser(null);
+      localStorage.removeItem('token');
     }
   };
 

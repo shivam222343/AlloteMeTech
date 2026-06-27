@@ -4,28 +4,19 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'https://allotemetech.onrender.
 
 const api = axios.create({
   baseURL: BASE_URL,
-  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Auto-refresh token on 401
-api.interceptors.response.use(
-  (res) => res,
-  async (err) => {
-    const original = err.config;
-    if (err.response?.status === 401 && !original._retry) {
-      original._retry = true;
-      try {
-        await axios.post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true });
-        return api(original);
-      } catch (refreshErr) {
-        // Do not force redirect here to avoid infinite loops on public pages.
-        // Let the AuthContext and ProtectedRoutes handle redirects.
-        return Promise.reject(refreshErr);
-      }
+// Attach token to requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    return Promise.reject(err);
-  }
+    return config;
+  },
+  (error) => Promise.reject(error)
 );
 
 export default api;

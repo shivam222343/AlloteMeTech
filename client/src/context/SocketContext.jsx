@@ -14,9 +14,10 @@ export const SocketProvider = ({ children }) => {
     let newSocket;
     if (user && user._id) {
       const socketUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'https://allotemetech.onrender.com';
+      const token = localStorage.getItem('token');
       newSocket = io(socketUrl, {
         query: { userId: user._id },
-        withCredentials: true,
+        auth: { token },
       });
 
       setSocket(newSocket);
