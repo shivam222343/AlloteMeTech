@@ -151,3 +151,143 @@ exports.getAnalytics = async (req, res) => {
 
   return ApiResponse.success(res, { topSolved, leastSolved, popularCompanies, popularTopics }, 'Analytics fetched');
 };
+
+// ─── User Profile & Stats (Admin) ─────────────────────────────────────────────
+exports.getUserDetails = async (req, res) => {
+  const { id } = req.params;
+
+  const user = await User.findById(id).select('-password -refreshToken').lean();
+  if (!user) return ApiResponse.notFound(res, 'User not found');
+
+  // Fetch user progress
+  const progress = await UserProgress.find({ user: id })
+    .populate('problem', 'title slug difficulty frequency acceptance')
+    .lean();
+
+  // Fetch scheduled
+  const now = new Date();
+  const weekFromNow = new Date(now);
+  weekFromNow.setDate(weekFromNow.getDate() + 7);
+  const scheduled = await UserProgress.find({
+    user: id,
+    scheduledFor: { $gte: now, $lte: weekFromNow },
+  })
+    .populate('problem', 'title slug difficulty')
+    .sort({ scheduledFor: 1 })
+    .lean();
+
+  // Fetch dashboard stats (similar to getDashboardStats but for the target user id)
+  const [scheduledCount, favoritesCount, revisionCount, solvedAggr, totalAggr] = await Promise.all([
+    UserProgress.countDocuments({ user: id, status: 'scheduled', scheduledFor: { $gte: new Date() } }),
+    UserProgress.countDocuments({ user: id, isFavorite: true }),
+    UserProgress.countDocuments({ user: id, status: 'revision' }),
+    UserProgress.aggregate([
+      { $match: { user: id, status: 'solved' } },
+      { $lookup: { from: 'problems', localField: 'problem', foreignField: '_id', as: 'problemDoc' } },
+      { $unwind: '$problemDoc' },
+      { $group: { _id: '$problemDoc.difficulty', count: { $sum: 1 } } }
+    ]),
+    Problem.aggregate([
+      { $group: { _id: '$difficulty', count: { $sum: 1 } } }
+    ])
+  ]);
+
+  const difficultyStats = {
+    easy: { solved: 0, total: 0 },
+    medium: { solved: 0, total: 0 },
+    hard: { solved: 0, total: 0 }
+  };
+  let totalSolved = 0;
+  let totalProblems = 0;
+
+  totalAggr.forEach(item => {
+    if (!item._id) return;
+    const diff = item._id.toLowerCase();
+    if (difficultyStats[diff]) {
+      difficultyStats[diff].total = item.count;
+      totalProblems += item.count;
+    }
+  });
+
+  solvedAggr.forEach(item => {
+    if (!item._id) return;
+    const diff = item._id.toLowerCase();
+    if (difficultyStats[diff]) {
+      difficultyStats[diff].solved = item.count;
+      totalSolved += item.count;
+    }
+  });
+
+  // Heatmap
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const startDate = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+  const endDate = today;
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(0, 0, 0, 0);
+
+  const heatmapAggr = await UserProgress.aggregate([
+    {
+      $match: {
+        user: id,
+        status: 'solved',
+        completedAt: { $gte: startDate, $lte: new Date(endDate.getTime() + 86400000) }
+      }
+    },
+    {
+      $group: {
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$completedAt" } },
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  const heatmapMap = {};
+  heatmapAggr.forEach(item => { heatmapMap[item._id] = item.count; });
+
+  const heatmapData = [];
+  const weekDays = [];
+
+  let curr = new Date(startDate);
+  const tzOffset = curr.getTimezoneOffset() * 60000;
+
+  while (curr <= endDate) {
+    const localISOTime = (new Date(curr - tzOffset)).toISOString().split('T')[0];
+    const count = heatmapMap[localISOTime] || 0;
+    heatmapData.push({ date: localISOTime, count });
+    curr.setDate(curr.getDate() + 1);
+  }
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const localISO = (new Date(d - d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    weekDays.push({
+      day: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      count: heatmapMap[localISO] || 0,
+    });
+  }
+
+  const recentActivity = await UserProgress.find({ user: id, status: 'solved' })
+    .populate('problem', 'title slug difficulty')
+    .sort({ completedAt: -1 })
+    .limit(20)
+    .lean();
+
+  return ApiResponse.success(res, {
+    user,
+    progress,
+    scheduled,
+    stats: {
+      solved: totalSolved,
+      totalProblems,
+      difficultyStats,
+      scheduled: scheduledCount,
+      favorites: favoritesCount,
+      revision: revisionCount,
+      weeklyProgress: weekDays,
+      heatmapData,
+      recentActivity,
+    }
+  }, 'User details fetched');
+};

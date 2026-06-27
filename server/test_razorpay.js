@@ -10,7 +10,7 @@ const razorpay = new Razorpay({
 });
 
 const options = {
-  amount: 4900,
+  amount: 5900,
   currency: 'INR',
   receipt: 'receipt_test_123',
 };

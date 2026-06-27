@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   getStats,
   getUsers,
+  getUserDetails,
   updateUser,
   deleteUser,
   createCompany,
@@ -28,6 +29,7 @@ router.get('/analytics', getAnalytics);
 
 // Users
 router.get('/users', getUsers);
+router.get('/users/:id', getUserDetails);
 router.put('/users/:id', updateUser);
 router.delete('/users/:id', deleteUser);
 

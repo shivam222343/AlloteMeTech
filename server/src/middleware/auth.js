@@ -33,6 +33,9 @@ const protect = async (req, res, next) => {
       return ApiResponse.forbidden(res, 'Your account has been suspended');
     }
 
+    // Update last activity date asynchronously
+    User.findByIdAndUpdate(user._id, { lastActivityDate: new Date() }).catch(err => console.error(err));
+
     req.user = user;
     next();
   } catch (err) {

@@ -4,12 +4,12 @@ const paymentSettingsSchema = new mongoose.Schema({
   originalPrice: {
     type: Number,
     required: true,
-    default: 99,
+    default: 299,
   },
   actualPrice: {
     type: Number,
     required: true,
-    default: 49,
+    default: 59,
   },
 }, { timestamps: true });
 

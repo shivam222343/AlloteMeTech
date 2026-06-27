@@ -6,7 +6,19 @@ const ApiResponse = require('../utils/apiResponse');
 // ─── Upsert Progress ──────────────────────────────────────────────────────────
 exports.upsertProgress = async (req, res) => {
   const userId = req.user._id;
-  const { problemId, status, isFavorite, notes, scheduledFor, timeSpent } = req.body;
+  const { problemId, slug, status, isFavorite, notes, scheduledFor, timeSpent } = req.body;
+
+  let targetProblemId = problemId;
+  if (!targetProblemId && slug) {
+    const problemDoc = await Problem.findOne({ slug });
+    if (problemDoc) {
+      targetProblemId = problemDoc._id;
+    }
+  }
+
+  if (!targetProblemId) {
+    return ApiResponse.badRequest(res, 'Problem ID or Slug is required and must match a valid problem');
+  }
 
   const update = {};
   if (status !== undefined) update.status = status;
@@ -21,7 +33,7 @@ exports.upsertProgress = async (req, res) => {
   }
 
   const progress = await UserProgress.findOneAndUpdate(
-    { user: userId, problem: problemId },
+    { user: userId, problem: targetProblemId },
     { $set: update },
     { new: true, upsert: true }
   );

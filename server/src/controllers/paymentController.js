@@ -19,7 +19,7 @@ const razorpay = new Razorpay({
 const getSettings = async () => {
   let settings = await PaymentSettings.findOne();
   if (!settings) {
-    settings = await PaymentSettings.create({ originalPrice: 99, actualPrice: 49 });
+    settings = await PaymentSettings.create({ originalPrice: 299, actualPrice: 59 });
   }
   return settings;
 };
@@ -99,7 +99,7 @@ exports.createOrder = async (req, res) => {
     if (!order) {
       return ApiResponse.badRequest(res, 'Razorpay order creation failed');
     }
-    
+
     return ApiResponse.success(res, {
       ...order,
       actualPrice: settings.actualPrice,

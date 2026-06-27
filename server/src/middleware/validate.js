@@ -29,15 +29,15 @@ const forgotPasswordSchema = Joi.object({
   email: Joi.string().email().required(),
 });
 
-// Progress schema
 const progressSchema = Joi.object({
-  problemId: Joi.string().required(),
+  problemId: Joi.string().hex().length(24),
+  slug: Joi.string(),
   status: Joi.string().valid('not_started', 'solved', 'revision', 'scheduled', 'favorite'),
   isFavorite: Joi.boolean(),
   notes: Joi.string().max(2000).allow(''),
   scheduledFor: Joi.date().allow(null),
   timeSpent: Joi.number().min(0),
-});
+}).or('problemId', 'slug');
 
 module.exports = {
   validate,
