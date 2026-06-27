@@ -18,8 +18,10 @@ api.interceptors.response.use(
       try {
         await axios.post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true });
         return api(original);
-      } catch {
-        window.location.href = '/login';
+      } catch (refreshErr) {
+        // Do not force redirect here to avoid infinite loops on public pages.
+        // Let the AuthContext and ProtectedRoutes handle redirects.
+        return Promise.reject(refreshErr);
       }
     }
     return Promise.reject(err);
