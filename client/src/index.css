@@ -1,0 +1,159 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-bg-primary text-text-primary font-sans;
+    min-height: 100vh;
+  }
+
+  ::selection {
+    @apply bg-accent-blue/30 text-text-primary;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-bg-primary; }
+  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-border-strong; }
+}
+
+/* ── Components ───────────────────────────────────────────────────────── */
+@layer components {
+
+  /* ── Buttons ── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded text-sm font-medium
+           transition-all duration-150 cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-bg-primary disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-accent-blue text-white hover:bg-accent-blue-hover focus:ring-accent-blue;
+  }
+  .btn-secondary {
+    @apply btn bg-bg-secondary text-text-primary border border-border hover:bg-bg-hover hover:border-border-strong focus:ring-border;
+  }
+  .btn-ghost {
+    @apply btn text-text-muted hover:text-text-primary hover:bg-bg-secondary focus:ring-border;
+  }
+  .btn-danger {
+    @apply btn bg-accent-red/10 text-accent-red border border-accent-red/20 hover:bg-accent-red hover:text-white focus:ring-accent-red;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+  .btn-icon {
+    @apply btn p-2 aspect-square;
+  }
+
+  /* ── Cards ── */
+  .card {
+    @apply bg-bg-card border border-border rounded-lg;
+  }
+  .card-hover {
+    @apply card transition-all duration-200 hover:border-border-strong hover:shadow-card-hover cursor-pointer;
+  }
+
+  /* ── Inputs ── */
+  .input {
+    @apply w-full bg-bg-secondary border border-border rounded px-3 py-2 text-sm text-text-primary
+           placeholder-text-faint focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue
+           transition-colors duration-150;
+  }
+  .input-error {
+    @apply border-accent-red focus:border-accent-red focus:ring-accent-red;
+  }
+
+  /* ── Badges ── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-medium;
+  }
+  .badge-easy   { @apply badge bg-accent-green/10 text-accent-green border border-accent-green/20; }
+  .badge-medium { @apply badge bg-accent-yellow/10 text-accent-yellow border border-accent-yellow/20; }
+  .badge-hard   { @apply badge bg-accent-red/10 text-accent-red border border-accent-red/20; }
+  .badge-blue   { @apply badge bg-accent-blue/10 text-accent-blue border border-accent-blue/20; }
+  .badge-purple { @apply badge bg-accent-purple/10 text-accent-purple border border-accent-purple/20; }
+  .badge-gray   { @apply badge bg-bg-secondary text-text-muted border border-border; }
+
+  /* ── Table ── */
+  .data-table {
+    @apply w-full text-sm;
+  }
+  .data-table thead tr {
+    @apply border-b border-border;
+  }
+  .data-table thead th {
+    @apply px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap;
+  }
+  .data-table tbody tr {
+    @apply border-b border-border/50 transition-colors duration-100 hover:bg-bg-secondary/50;
+  }
+  .data-table tbody td {
+    @apply px-4 py-3 text-text-secondary;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded text-sm text-text-muted
+           hover:text-text-primary hover:bg-bg-secondary transition-all duration-150 cursor-pointer;
+  }
+  .sidebar-link.active {
+    @apply bg-accent-blue/10 text-accent-blue font-medium;
+  }
+
+  /* ── Divider ── */
+  .divider {
+    @apply h-px bg-border my-4;
+  }
+
+  /* ── Skeleton ── */
+  .skeleton {
+    @apply animate-pulse bg-bg-secondary rounded;
+  }
+
+  /* ── Status Tags ── */
+  .status-not-started { @apply text-text-faint; }
+  .status-solved       { @apply text-accent-green; }
+  .status-revision     { @apply text-accent-yellow; }
+  .status-scheduled    { @apply text-accent-blue; }
+  .status-favorite     { @apply text-accent-red; }
+}
+
+/* ── Utilities ────────────────────────────────────────────────────────── */
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-accent-blue to-accent-purple bg-clip-text text-transparent;
+  }
+
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  .transition-base { @apply transition-all duration-200 ease-in-out; }
+}
+.admin-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.admin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(59, 130, 246, 0.5);
+  border-radius: 10px;
+}
+.admin-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(59, 130, 246, 0.8);
+}
