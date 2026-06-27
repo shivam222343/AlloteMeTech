@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Eye, EyeOff, UserPlus } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
 
@@ -19,6 +20,7 @@ const schema = z.object({
 
 const Signup = () => {
   const { register: registerUser } = useAuth();
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const [showPw, setShowPw] = useState(false);
 
@@ -28,6 +30,7 @@ const Signup = () => {
     try {
       await registerUser({ name: data.name, email: data.email, password: data.password });
       toast.success('Account created! Welcome to AlloteMe Tech.');
+      window.scrollTo(0, 0);
       navigate('/dashboard');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed');
@@ -48,7 +51,7 @@ const Signup = () => {
         <div className="text-center mb-8">
           <Link to="/" className="inline-block mb-4">
             <img
-              src="/AlloteMe_Logos.png"
+              src={isDark ? "/AlloteMe_Logos.png" : "/AlloteMe_Logos _Light.png"}
               alt="AlloteMe Tech"
               className="h-20 w-auto object-contain mx-auto"
             />

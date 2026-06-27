@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const schema = z.object({
   email: z.string().email('Invalid email'),
@@ -14,10 +15,22 @@ const schema = z.object({
 
 const Login = () => {
   const { login } = useAuth();
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || '/dashboard';
   const [showPw, setShowPw] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error') === 'another_device') {
+      toast.error('You were logged out because your account was logged in on another device.', {
+        id: 'session-conflict-toast',
+        duration: 4000,
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({ resolver: zodResolver(schema) });
 
@@ -25,6 +38,7 @@ const Login = () => {
     try {
       await login(data);
       toast.success('Welcome back!');
+      window.scrollTo(0, 0);
       navigate(from, { replace: true });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Login failed');
@@ -46,7 +60,7 @@ const Login = () => {
         <div className="text-center mb-8">
           <Link to="/" className="inline-block mb-4">
             <img
-              src="/AlloteMe_Logos.png"
+              src={isDark ? "/AlloteMe_Logos.png" : "/AlloteMe_Logos _Light.png"}
               alt="AlloteMe Tech"
               className="h-20 w-auto object-contain mx-auto"
             />

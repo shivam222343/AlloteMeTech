@@ -45,17 +45,39 @@ const Profile = () => {
       {/* Profile Header */}
       <div className="card p-6">
         <div className="flex items-start gap-4 flex-wrap">
-          {user.avatar ? (
-            <img src={user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover flex-shrink-0" />
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center text-xl font-semibold text-accent-blue flex-shrink-0">
-              {getInitials(user.name)}
+          {user.isPremium ? (
+            <div className="premium-avatar-container flex-shrink-0">
+              {user.avatar ? (
+                <img src={user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover" />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-accent-blue/20 flex items-center justify-center text-xl font-semibold text-accent-blue">
+                  {getInitials(user.name)}
+                </div>
+              )}
             </div>
+          ) : (
+            user.avatar ? (
+              <img src={user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover flex-shrink-0" />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-accent-blue/20 border border-accent-blue/30 flex items-center justify-center text-xl font-semibold text-accent-blue flex-shrink-0">
+                {getInitials(user.name)}
+              </div>
+            )
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-text-primary">{user.name}</h1>
               {user.role === 'admin' && <span className="badge badge-blue">Admin</span>}
+              {user.isPremium ? (
+                <span className="px-2 py-0.5 text-3xs font-extrabold rounded bg-gradient-to-r from-accent-yellow to-amber-500 text-bg-primary uppercase tracking-wider shadow-sm select-none">Premium</span>
+              ) : (
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('open-premium-modal'))}
+                  className="px-2.5 py-0.5 text-3xs font-extrabold rounded bg-gradient-to-r from-accent-yellow to-amber-500 text-bg-primary uppercase tracking-wider hover:opacity-95 shadow transition-all hover:scale-105"
+                >
+                  Get Premium
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-sm text-text-muted">
               <Mail className="w-3.5 h-3.5" />
@@ -70,6 +92,12 @@ const Profile = () => {
                 <Clock className="w-3.5 h-3.5" />
                 <span>Joined {formatDate(user.createdAt)}</span>
               </div>
+              {user.isPremium && user.premiumExpiresAt && (
+                <div className="flex items-center gap-1.5 text-xs text-text-faint border border-accent-yellow/20 bg-accent-yellow/5 px-2 py-0.5 rounded-full">
+                  <span className="text-accent-yellow font-bold">Expires:</span>
+                  <span className="text-text-secondary">{formatDate(user.premiumExpiresAt)}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -91,7 +119,7 @@ const Profile = () => {
           <h2 className="text-sm font-semibold text-text-primary mb-4">Recently Solved</h2>
           <div className="space-y-2">
             {solved.slice(0, 10).map((p) => (
-              <div key={p._id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+              <div key={p._id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <DifficultyBadge difficulty={p.problem?.difficulty} />
                   <a href={p.problem?.leetcodeUrl} target="_blank" rel="noopener noreferrer"
@@ -116,7 +144,7 @@ const Profile = () => {
           </h2>
           <div className="space-y-2">
             {favorites.slice(0, 10).map((p) => (
-              <div key={p._id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+              <div key={p._id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <DifficultyBadge difficulty={p.problem?.difficulty} />
                   <a href={p.problem?.leetcodeUrl} target="_blank" rel="noopener noreferrer"
@@ -134,3 +162,4 @@ const Profile = () => {
 };
 
 export default Profile;
+

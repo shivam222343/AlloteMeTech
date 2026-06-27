@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom';
 import { authApi } from '../api';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useTheme } from '../context/ThemeContext';
+
 
 const ForgotPassword = () => {
+  const { isDark } = useTheme();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -16,6 +19,7 @@ const ForgotPassword = () => {
     try {
       await authApi.forgotPassword({ email });
       setSent(true);
+      window.scrollTo(0, 0);
       toast.success('If that email exists, a reset link was sent');
     } catch {
       toast.error('Something went wrong');
@@ -30,7 +34,7 @@ const ForgotPassword = () => {
         <div className="text-center mb-8">
           <Link to="/" className="inline-block mb-4">
             <img
-              src="/AlloteMe_Logos.png"
+              src={isDark ? "/AlloteMe_Logos.png" : "/AlloteMe_Logos _Light.png"}
               alt="AlloteMe Tech"
               className="h-10 w-auto object-contain mx-auto"
             />

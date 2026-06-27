@@ -19,4 +19,19 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Global response handler to auto logout on session conflicts
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const msg = error.response.data?.message;
+      if (msg && msg.includes('another device')) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?error=another_device';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;

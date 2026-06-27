@@ -8,25 +8,31 @@ export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    let newSocket;
-    if (user && user._id) {
-      const socketUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'https://allotemetech.onrender.com';
-      const token = localStorage.getItem('token');
-      newSocket = io(socketUrl, {
-        query: { userId: user._id },
-        auth: { token },
-      });
+    if (loading) return; // wait for auth to resolve
 
-      setSocket(newSocket);
-    }
+    const socketUrl = import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL.replace('/api', '')
+      : 'https://allotemetech.onrender.com';
+
+    const token = localStorage.getItem('token');
+
+    // Connect for all users — guests get read-only (no auth token sent)
+    const newSocket = io(socketUrl, {
+      query: user?._id ? { userId: user._id } : {},
+      auth: token ? { token } : {},
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
+
+    setSocket(newSocket);
 
     return () => {
-      if (newSocket) newSocket.close();
+      newSocket.close();
     };
-  }, [user]);
+  }, [user, loading]);
 
   return (
     <SocketContext.Provider value={{ socket }}>

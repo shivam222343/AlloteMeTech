@@ -54,11 +54,13 @@ export const adminApi = {
   deleteCompany: (id) => api.delete(`/admin/companies/${id}`),
 
   // Problems
+  getProblems: (params) => api.get('/admin/problems', { params }),
   createProblem: (data) => api.post('/admin/problems', data),
   updateProblem: (id, data) => api.put(`/admin/problems/${id}`, data),
   deleteProblem: (id) => api.delete(`/admin/problems/${id}`),
 
   // Topics
+  getTopics: (params) => api.get('/admin/topics', { params }),
   createTopic: (data) => api.post('/admin/topics', data),
   updateTopic: (id, data) => api.put(`/admin/topics/${id}`, data),
   deleteTopic: (id) => api.delete(`/admin/topics/${id}`),
@@ -67,7 +69,34 @@ export const adminApi = {
   syncGithub: () => api.post('/admin/github/sync'),
 };
 
+// ── Discussion ────────────────────────────────────────────────────────────────
+export const discussionApi = {
+  getMessages: (params) => api.get('/discussion', { params }),
+  createMessage: (data) => api.post('/discussion', data),
+  editMessage: (id, data) => api.put(`/discussion/${id}`, data),
+  deleteMessage: (id) => api.delete(`/discussion/${id}`),
+  reactMessage: (id, emoji) => api.post(`/discussion/${id}/react`, { emoji }),
+  searchMentions: (q) => api.get('/discussion/mentions/search', { params: { q } }),
+};
+
 // ── Public ────────────────────────────────────────────────────────────────────
 export const publicApi = {
   getStats: () => api.get('/public-stats'),
 };
+
+// ── Payment ───────────────────────────────────────────────────────────────────
+export const paymentApi = {
+  getConfig: () => api.get('/payment/config'),
+  validateCoupon: (code) => api.post('/payment/validate-coupon', { code }),
+  createOrder: (couponCode) => api.post('/payment/create-order', { couponCode }),
+  verify: (data) => api.post('/payment/verify', data),
+  
+  // Admin pricing and coupon management
+  updateConfig: (data) => api.put('/payment/config', data),
+  getCoupons: () => api.get('/payment/coupons'),
+  createCoupon: (data) => api.post('/payment/coupons', data),
+  deleteCoupon: (id) => api.delete(`/payment/coupons/${id}`),
+};
+
+
+

@@ -4,6 +4,66 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THEME VARIABLES
+   Default = dark. Adding data-theme="light" on <html> switches to light.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+[data-theme="dark"] {
+  /* Backgrounds */
+  --bg-primary:   #0B0F19;
+  --bg-card:      #111827;
+  --bg-secondary: #1F2937;
+  --bg-hover:     #243147;
+
+  /* Borders */
+  --border:        #2D3748;
+  --border-subtle: #1F2937;
+  --border-strong: #374151;
+
+  /* Text */
+  --text-primary:   #F9FAFB;
+  --text-secondary: #E5E7EB;
+  --text-muted:     #9CA3AF;
+  --text-faint:     #6B7280;
+
+  /* Shadows */
+  --shadow-color:        rgba(0, 0, 0, 0.4);
+  --shadow-color-strong: rgba(0, 0, 0, 0.5);
+
+  /* Scrollbar */
+  --scrollbar-thumb: #2D3748;
+  --scrollbar-thumb-hover: #374151;
+}
+
+[data-theme="light"] {
+  /* Backgrounds */
+  --bg-primary:   #F8FAFC;
+  --bg-card:      #FFFFFF;
+  --bg-secondary: #F1F5F9;
+  --bg-hover:     #E2E8F0;
+
+  /* Borders */
+  --border:        #CBD5E1;
+  --border-subtle: #E2E8F0;
+  --border-strong: #94A3B8;
+
+  /* Text */
+  --text-primary:   #0F172A;
+  --text-secondary: #1E293B;
+  --text-muted:     #475569;
+  --text-faint:     #94A3B8;
+
+  /* Shadows */
+  --shadow-color:        rgba(0, 0, 0, 0.08);
+  --shadow-color-strong: rgba(0, 0, 0, 0.15);
+
+  /* Scrollbar */
+  --scrollbar-thumb: #CBD5E1;
+  --scrollbar-thumb-hover: #94A3B8;
+}
+
 /* ── Base ─────────────────────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
@@ -17,6 +77,7 @@
   body {
     @apply bg-bg-primary text-text-primary font-sans;
     min-height: 100vh;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
   ::selection {
@@ -24,9 +85,14 @@
   }
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { @apply bg-bg-primary; }
-  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-border-strong; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
 }
 
 /* ── Components ───────────────────────────────────────────────────────── */
@@ -99,7 +165,7 @@
     @apply px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap;
   }
   .data-table tbody tr {
-    @apply border-b border-border/50 transition-colors duration-100 hover:bg-bg-secondary/50;
+    @apply border-b border-border transition-colors duration-100 hover:bg-bg-hover;
   }
   .data-table tbody td {
     @apply px-4 py-3 text-text-secondary;
@@ -142,18 +208,64 @@
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
   .transition-base { @apply transition-all duration-200 ease-in-out; }
+
+  /* Smooth theme transitions on interactive elements */
+  .theme-transition {
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+  }
 }
-.admin-scroll::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.admin-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
+
+/* ── Admin scrollbar ──────────────────────────────────────────────────── */
+.admin-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.admin-scroll::-webkit-scrollbar-track { background: transparent; }
 .admin-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(59, 130, 246, 0.5);
+  background-color: rgba(59, 130, 246, 0.4);
   border-radius: 10px;
 }
 .admin-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(59, 130, 246, 0.8);
+  background-color: rgba(59, 130, 246, 0.7);
+}
+
+/* Elevate hovered/focused table rows to resolve z-index clipping context overlay bugs on popups */
+.data-table tbody tr:hover,
+.data-table tbody tr:focus-within {
+  position: relative;
+  z-index: 30;
+}
+
+/* Golden premium avatar border with shining/shimmering effect */
+.premium-avatar-container {
+  position: relative;
+  border-radius: 9999px;
+  padding: 3px; /* gold border thickness */
+  background: linear-gradient(135deg, #FFE082 0%, #FFB300 50%, #FFE082 100%);
+  background-size: 200% 200%;
+  animation: gold-shimmer 3s linear infinite;
+  box-shadow: 0 0 10px rgba(255, 179, 0, 0.45);
+  display: inline-block;
+  overflow: hidden;
+}
+
+@keyframes gold-shimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Shining gloss sweep overlay inside avatar container */
+.premium-avatar-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: translateX(-100%) rotate(25deg);
+  animation: shine-sweep 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes shine-sweep {
+  0% { transform: translateX(-120%) rotate(25deg); }
+  25% { transform: translateX(120%) rotate(25deg); }
+  100% { transform: translateX(120%) rotate(25deg); }
 }

@@ -45,21 +45,16 @@ const LeetCodeProgress = ({ stats }) => {
   const total = easy + medium + hard;
   const allTotal = (stats?.difficultyStats?.easy?.total || 0) + (stats?.difficultyStats?.medium?.total || 0) + (stats?.difficultyStats?.hard?.total || 0) || 1;
 
-  // The ring is an arc. Let's use a standard circle rotated by 135 degrees.
-  // The arc covers 270 degrees (75% of the circle).
   const strokeWidth = 3.5;
   const radius = 45;
   const circumference = 2 * Math.PI * radius;
   const arcLength = circumference * 0.75; // 270 degrees
   const gap = 2; // Gap between segments in pixels
 
-  // Calculate segment lengths within the 270 degree arc
-  // We allocate the arc length proportionally, but if total is 0, we just show empty.
   const easyLen = total > 0 ? (easy / total) * (arcLength - 2 * gap) : 0;
   const medLen = total > 0 ? (medium / total) * (arcLength - 2 * gap) : 0;
   const hardLen = total > 0 ? (hard / total) * (arcLength - 2 * gap) : 0;
 
-  // Offsets
   const easyOffset = 0;
   const medOffset = easyLen > 0 ? easyLen + gap : 0;
   const hardOffset = medOffset + (medLen > 0 ? medLen + gap : 0);
@@ -70,8 +65,8 @@ const LeetCodeProgress = ({ stats }) => {
         {/* Circular Progress Ring */}
         <div className="relative w-36 h-36 flex-shrink-0">
           <svg className="w-full h-full transform rotate-[135deg]" viewBox="0 0 100 100">
-            {/* Background Arc */}
-            <circle cx="50" cy="50" r={radius} fill="none" stroke="#2b2b2b" strokeWidth={strokeWidth}
+            {/* Background Arc - uses CSS variable color */}
+            <circle cx="50" cy="50" r={radius} fill="none" stroke="var(--border)" strokeWidth={strokeWidth}
               strokeDasharray={`${arcLength} ${circumference}`} strokeLinecap="round" />
             
             {/* Easy Segment */}
@@ -94,32 +89,32 @@ const LeetCodeProgress = ({ stats }) => {
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center pt-2">
             <div className="flex items-baseline gap-[1px]">
-              <span className="text-[28px] font-medium text-white tracking-tight leading-none">{total}</span>
-              <span className="text-[11px] text-[#8a8a8a] font-medium leading-none">/{allTotal}</span>
+              <span className="text-[28px] font-medium text-text-primary tracking-tight leading-none">{total}</span>
+              <span className="text-[11px] text-text-muted font-medium leading-none">/{allTotal}</span>
             </div>
             <div className="flex items-center gap-1 mt-1">
               <CheckCircle2 className="w-3 h-3 text-[#26a641]" />
-              <span className="text-xs text-white font-medium">Solved</span>
+              <span className="text-xs text-text-primary font-medium">Solved</span>
             </div>
-            <div className="absolute bottom-2 text-[10px] text-[#8a8a8a] font-medium">
+            <div className="absolute bottom-2 text-[10px] text-text-muted font-medium">
               0 Attempting
             </div>
           </div>
         </div>
 
-        {/* Legend */}
+        {/* Legend - adapts fully to light/dark modes */}
         <div className="flex flex-col gap-2 w-32">
-          <div className="bg-[#2b2b2b] rounded-md p-2 flex flex-col justify-center items-center h-[52px]">
-            <span className="text-xs font-medium text-[#00b8a3]">Easy</span>
-            <span className="text-[13px] font-medium text-white mt-0.5">{easy}<span className="text-[#8a8a8a] text-[11px]">/{easyTot}</span></span>
+          <div className="bg-bg-secondary border border-border rounded-md p-2 flex flex-col justify-center items-center h-[52px]">
+            <span className="text-xs font-semibold text-[#00b8a3]">Easy</span>
+            <span className="text-[13px] font-semibold text-text-primary mt-0.5">{easy}<span className="text-text-muted text-[11px]">/{easyTot}</span></span>
           </div>
-          <div className="bg-[#2b2b2b] rounded-md p-2 flex flex-col justify-center items-center h-[52px]">
-            <span className="text-xs font-medium text-[#ffc01e]">Med.</span>
-            <span className="text-[13px] font-medium text-white mt-0.5">{medium}<span className="text-[#8a8a8a] text-[11px]">/{medTot}</span></span>
+          <div className="bg-bg-secondary border border-border rounded-md p-2 flex flex-col justify-center items-center h-[52px]">
+            <span className="text-xs font-semibold text-[#ffc01e]">Med.</span>
+            <span className="text-[13px] font-semibold text-text-primary mt-0.5">{medium}<span className="text-text-muted text-[11px]">/{medTot}</span></span>
           </div>
-          <div className="bg-[#2b2b2b] rounded-md p-2 flex flex-col justify-center items-center h-[52px]">
-            <span className="text-xs font-medium text-[#ff375f]">Hard</span>
-            <span className="text-[13px] font-medium text-white mt-0.5">{hard}<span className="text-[#8a8a8a] text-[11px]">/{hardTot}</span></span>
+          <div className="bg-bg-secondary border border-border rounded-md p-2 flex flex-col justify-center items-center h-[52px]">
+            <span className="text-xs font-semibold text-[#ff375f]">Hard</span>
+            <span className="text-[13px] font-semibold text-text-primary mt-0.5">{hard}<span className="text-text-muted text-[11px]">/{hardTot}</span></span>
           </div>
         </div>
       </div>
@@ -139,7 +134,6 @@ const ActivityHeatmap = ({ data = [], streak = 0, availableYears = [], selectedY
   let currentMonthBlocks = [];
   let currentWeek = [];
 
-  // Group by exact month blocks
   data.forEach((day, index) => {
     const d = new Date(day.date + 'T12:00:00');
     const mName = d.toLocaleString('en-US', { month: 'short' });
@@ -170,7 +164,7 @@ const ActivityHeatmap = ({ data = [], streak = 0, availableYears = [], selectedY
   }
 
   const getColor = (count) => {
-    if (!count) return '#2b2b2b';
+    if (!count) return 'var(--bg-secondary)';
     if (count <= 1) return '#0e4429';
     if (count <= 3) return '#006d32';
     if (count <= 5) return '#26a641';
@@ -221,8 +215,11 @@ const ActivityHeatmap = ({ data = [], streak = 0, availableYears = [], selectedY
                       {col.map((day, dIdx) => (
                         <div
                           key={dIdx}
-                          className="w-[11px] h-[11px] rounded-[2px] relative cursor-pointer hover:scale-[1.3] hover:z-10 transition-all duration-200 hover:ring-1 hover:ring-white/30"
-                          style={{ backgroundColor: day ? getColor(day.count) : '#2b2b2b' }}
+                          className="w-[11px] h-[11px] rounded-[2px] relative cursor-pointer hover:scale-[1.3] hover:z-10 transition-all duration-200 hover:ring-1 hover:ring-white/30 border"
+                          style={{ 
+                            backgroundColor: day ? getColor(day.count) : 'var(--bg-secondary)',
+                            borderColor: 'var(--border-subtle)'
+                          }}
                           title={day ? `${day.count} submissions on ${new Date(day.date).toLocaleDateString()}` : undefined}
                         />
                       ))}
@@ -365,7 +362,7 @@ const Dashboard = () => {
           ) : (
             <div className="space-y-2">
               {scheduled.map(({ problem, scheduledFor }) => (
-                <div key={problem._id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+                <div key={problem._id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <DifficultyBadge difficulty={problem.difficulty} />
                     <a href={problem.leetcodeUrl} target="_blank" rel="noopener noreferrer"
@@ -394,7 +391,7 @@ const Dashboard = () => {
           ) : (
             <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-2">
               {stats.recentActivity.map(({ problem, completedAt }) => (
-                <div key={problem._id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+                <div key={problem._id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <CheckCircle2 className="w-3.5 h-3.5 text-accent-green flex-shrink-0" />
                     <DifficultyBadge difficulty={problem.difficulty} />
@@ -412,3 +409,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

@@ -8,8 +8,8 @@ import { formatRelativeTime } from '../utils/helpers';
 
 const SORT_OPTIONS = [
   { value: 'name', label: 'Alphabetical' },
-  { value: 'questions', label: 'Most Questions' },
-  { value: 'newest', label: 'Recently Updated' },
+  { value: 'questions', label: 'Most Qs' },
+  { value: 'newest', label: 'Recent' },
 ];
 
 const ALPHABET = ['#', ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))];

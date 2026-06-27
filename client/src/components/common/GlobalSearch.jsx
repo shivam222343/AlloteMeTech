@@ -114,7 +114,7 @@ const GlobalSearch = () => {
                     role="option"
                     aria-selected={i === selected}
                     onClick={() => handleSelect(r)}
-                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${i === selected ? 'bg-bg-secondary' : 'hover:bg-bg-secondary/50'}`}
+                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${i === selected ? 'bg-bg-secondary' : 'hover:bg-bg-hover'}`}
                   >
                     <Icon className="w-4 h-4 text-text-faint flex-shrink-0" />
                     <div className="flex-1 min-w-0">

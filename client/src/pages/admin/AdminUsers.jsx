@@ -42,8 +42,8 @@ const AdminUsers = () => {
       </div>
 
       {isLoading ? <div className="flex justify-center py-12"><Spinner size="lg" /></div> : (
-        <div className="card overflow-hidden">
-          <table className="data-table">
+        <div className="card overflow-x-auto">
+          <table className="data-table min-w-[560px]">
             <thead>
               <tr>
                 <th>User</th>
@@ -58,15 +58,30 @@ const AdminUsers = () => {
                 <tr key={u._id}>
                   <td>
                     <div className="flex items-center gap-2">
-                      {u.avatar ? (
-                        <img src={u.avatar} alt="" className="w-7 h-7 rounded-full object-cover" />
-                      ) : (
-                        <div className="w-7 h-7 rounded-full bg-accent-blue/10 flex items-center justify-center text-xs font-medium text-accent-blue">
-                          {u.name?.[0]}
+                      {u.isPremium ? (
+                        <div className="premium-avatar-container flex-shrink-0" style={{ padding: '2px' }}>
+                          {u.avatar ? (
+                            <img src={u.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-accent-blue/10 flex items-center justify-center text-[10px] font-bold text-accent-blue">
+                              {u.name?.[0]}
+                            </div>
+                          )}
                         </div>
+                      ) : (
+                        u.avatar ? (
+                          <img src={u.avatar} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-accent-blue/10 flex items-center justify-center text-xs font-medium text-accent-blue flex-shrink-0">
+                            {u.name?.[0]}
+                          </div>
+                        )
                       )}
                       <div>
-                        <p className="text-sm font-medium text-text-primary">{u.name}</p>
+                        <p className="text-sm font-medium text-text-primary flex items-center gap-1">
+                          {u.name}
+                          {u.isPremium && <span className="text-[10px]" title="Premium User">👑</span>}
+                        </p>
                         <p className="text-2xs text-text-faint">{u.email}</p>
                       </div>
                     </div>
