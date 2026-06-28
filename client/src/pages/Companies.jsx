@@ -5,6 +5,7 @@ import { companiesApi } from '../api';
 import { Search, Building2, ChevronRight } from 'lucide-react';
 import Spinner from '../components/common/Spinner';
 import { formatRelativeTime } from '../utils/helpers';
+import ContinueLearningRecommendation from '../components/common/ContinueLearningRecommendation';
 
 const SORT_OPTIONS = [
   { value: 'name', label: 'Alphabetical' },
@@ -74,6 +75,8 @@ const Companies = () => {
           Browse {pagination?.total || '—'} companies and their DSA questions (Tech Round + Interview)
         </p>
       </div>
+
+      <ContinueLearningRecommendation />
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">

@@ -213,6 +213,9 @@ const ProblemTable = ({ problems, progressMap = {}, onProgressUpdate }) => {
                     </div>
                   ) : (
                     <a href={p.leetcodeUrl} target="_blank" rel="noopener noreferrer"
+                      data-problem-id={p._id}
+                      data-problem-title={p.title}
+                      data-already-solved={p.status === 'solved'}
                       className="text-text-primary hover:text-accent-blue transition-colors font-medium text-sm">
                       {p.title}
                     </a>
@@ -243,6 +246,9 @@ const ProblemTable = ({ problems, progressMap = {}, onProgressUpdate }) => {
                   ) : (
                     <div className="flex items-center gap-2">
                       <a href={p.leetcodeUrl} target="_blank" rel="noopener noreferrer"
+                        data-problem-id={p._id}
+                        data-problem-title={p.title}
+                        data-already-solved={p.status === 'solved'}
                         className="inline-flex text-text-faint hover:text-accent-blue transition-colors" aria-label="Open on LeetCode">
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>

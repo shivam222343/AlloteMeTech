@@ -4,7 +4,7 @@ import { CreditCard, Percent, Tag, Plus, Trash2, Save, Calendar } from 'lucide-r
 import toast from 'react-hot-toast';
 
 const AdminPricing = () => {
-  const [config, setConfig] = useState({ originalPrice: 99, actualPrice: 49 });
+  const [config, setConfig] = useState({ originalPrice: 299, actualPrice: 59 });
   const [saveLoading, setSaveLoading] = useState(false);
 
   const [coupons, setCoupons] = useState([]);
@@ -108,7 +108,7 @@ const AdminPricing = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Left Column: Pricing Plan settings */}
         <div className="card p-5 space-y-4 h-fit">
           <div className="flex items-center gap-2 border-b border-border pb-3 mb-2">

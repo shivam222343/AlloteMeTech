@@ -8,6 +8,7 @@ export const authApi = {
   getMe: () => api.get('/auth/me'),
   refresh: () => api.post('/auth/refresh'),
   forgotPassword: (data) => api.post('/auth/forgot-password', data),
+  updatePassword: (data) => api.put('/auth/update-password', data),
 };
 
 // ── Companies ─────────────────────────────────────────────────────────────────
@@ -36,6 +37,7 @@ export const progressApi = {
   upsert: (data) => api.post('/progress', data),
   getScheduled: () => api.get('/progress/scheduled'),
   getDashboard: (year) => api.get('/progress/dashboard', { params: { year } }),
+  getRecommendation: () => api.get('/progress/recommendation'),
 };
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -45,6 +47,7 @@ export const adminApi = {
 
   // Users
   getUsers: (params) => api.get('/admin/users', { params }),
+  getUserDetail: (id) => api.get(`/admin/users/${id}`),
   updateUser: (id, data) => api.put(`/admin/users/${id}`, data),
   deleteUser: (id) => api.delete(`/admin/users/${id}`),
 

@@ -37,11 +37,24 @@ const Footer = () => {
           <div>
             <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider mb-3">Practice</h4>
             <ul className="space-y-2">
-              {[['Companies', '/companies'], ['Topics', '/topics'], ['Dashboard', '/dashboard']].map(([label, to]) => (
+              {[
+                ['Companies', '/companies'],
+                ['Topics', '/topics'],
+                ['Discussion Forum', '/discussion'],
+                ['Dashboard', '/dashboard']
+              ].map(([label, to]) => (
                 <li key={to}>
                   <Link to={to} className="text-sm text-text-muted hover:text-text-primary transition-colors">{label}</Link>
                 </li>
               ))}
+              <li>
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('open-premium-modal'))}
+                  className="text-sm text-text-muted hover:text-text-primary transition-colors text-left"
+                >
+                  Premium Plans
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -49,7 +62,7 @@ const Footer = () => {
           <div>
             <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider mb-3">Coming Soon</h4>
             <ul className="space-y-2">
-              {['Premium Plans', 'Mock Interviews', 'Discussion Forum', 'Weekly Contests', 'AI Assistant'].map((label) => (
+              {['Mock Interviews', 'Weekly Contests', 'AI Assistant'].map((label) => (
                 <li key={label}>
                   <span className="text-sm text-text-faint">{label}</span>
                 </li>

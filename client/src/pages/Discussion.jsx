@@ -53,14 +53,17 @@ const Discussion = () => {
     queryFn: () => discussionApi.getMessages({ page: 1, limit: 40 }),
   });
 
+  const initialized = useRef(false);
+
   // Synchronize state when query data changes (fixes the empty refresh bug)
   useEffect(() => {
-    if (initialData?.data?.data) {
+    if (initialData?.data?.data && !initialized.current) {
       const data = initialData.data.data || [];
       const pag = initialData.data.pagination;
       setMessages(data);
       setHasMore(pag?.pages > 1);
       setTimeout(() => scrollToBottom(true), 100);
+      initialized.current = true;
     }
   }, [initialData]);
 
@@ -156,7 +159,12 @@ const Discussion = () => {
   };
 
   const scrollToBottom = (instant = false) => {
-    bottomRef.current?.scrollIntoView({ behavior: instant ? 'instant' : 'smooth' });
+    if (listRef.current) {
+      listRef.current.scrollTo({
+        top: listRef.current.scrollHeight,
+        behavior: instant ? 'auto' : 'smooth'
+      });
+    }
   };
 
   // ── Load more (pagination) ─────────────────────────────────────────────────

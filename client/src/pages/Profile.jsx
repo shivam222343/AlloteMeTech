@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
-import { progressApi } from '../api';
-import { User, CheckCircle2, Star, Calendar, RotateCcw, Flame, Clock, Mail } from 'lucide-react';
+import { progressApi, authApi } from '../api';
+import { User, CheckCircle2, Star, Calendar, RotateCcw, Flame, Clock, Mail, Lock } from 'lucide-react';
 import { DifficultyBadge } from '../components/common/Badge';
 import { getInitials, formatDate, formatRelativeTime } from '../utils/helpers';
 import Spinner from '../components/common/Spinner';
+import toast from 'react-hot-toast';
 
 const StatItem = ({ icon: Icon, label, value, color }) => (
   <div className="flex flex-col items-center gap-1 text-center p-4 card">
@@ -16,6 +18,10 @@ const StatItem = ({ icon: Icon, label, value, color }) => (
 
 const Profile = () => {
   const { user } = useAuth();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [updating, setUpdating] = useState(false);
 
   const { data: progressData, isLoading } = useQuery({
     queryKey: ['user-progress-all'],
@@ -37,6 +43,34 @@ const Profile = () => {
   const solved = all.filter((p) => p.status === 'solved');
   const revision = all.filter((p) => p.status === 'revision');
   const scheduled = scheduledData?.data?.data?.scheduled || [];
+
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      await authApi.updatePassword({
+        currentPassword: currentPassword || undefined,
+        newPassword
+      });
+      toast.success('Password updated successfully! 🎉');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update password');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   if (!user) return null;
 
@@ -157,6 +191,65 @@ const Profile = () => {
           </div>
         </div>
       )}
+
+      {/* Change Password Card */}
+      <div className="card p-5">
+        <h2 className="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
+          <Lock className="w-4 h-4 text-accent-blue" /> Change Password
+        </h2>
+        <form onSubmit={handleUpdatePassword} className="space-y-4 max-w-md">
+          <div>
+            <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-1.5">
+              Current Password
+            </label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Enter current password (leave blank if OAuth user)"
+              className="input text-sm w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-1.5">
+              New Password
+            </label>
+            <input
+              type="password"
+              required
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Minimum 6 characters"
+              className="input text-sm w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-1.5">
+              Confirm New Password
+            </label>
+            <input
+              type="password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+              className="input text-sm w-full"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={updating}
+            className="btn btn-primary btn-sm flex items-center gap-1.5 select-none disabled:opacity-50"
+          >
+            {updating ? (
+              <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Lock className="w-3.5 h-3.5" />
+            )}
+            Update Password
+          </button>
+        </form>
+      </div>
     </div>
   );
 };

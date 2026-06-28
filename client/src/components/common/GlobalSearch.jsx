@@ -55,6 +55,11 @@ const GlobalSearch = () => {
     if (e.key === 'Enter' && results[selected]) {
       const r = results[selected];
       if (r.type === 'problem') {
+        localStorage.setItem('pending_leetcode_problem', JSON.stringify({
+          id: r._id,
+          title: r.title,
+          timestamp: Date.now()
+        }));
         window.open(r.leetcodeUrl || `https://leetcode.com/problems/${r.slug}`, '_blank');
       } else {
         navigate(typeRoute[r.type](r));
@@ -67,6 +72,11 @@ const GlobalSearch = () => {
 
   const handleSelect = (r) => {
     if (r.type === 'problem') {
+      localStorage.setItem('pending_leetcode_problem', JSON.stringify({
+        id: r._id,
+        title: r.title,
+        timestamp: Date.now()
+      }));
       window.open(r.leetcodeUrl || `https://leetcode.com/problems/${r.slug}`, '_blank');
     } else {
       navigate(typeRoute[r.type](r));

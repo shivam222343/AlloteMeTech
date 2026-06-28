@@ -108,7 +108,7 @@ const TopicDetail = () => {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-text-primary">Unlock Recent Interview Questions</p>
-                  <p className="text-xs text-text-muted">Questions asked in the last 30 days and 60 days are reserved for premium members. Unlock now for just ₹49/year!</p>
+                  <p className="text-xs text-text-muted">Questions asked in the last 30 days and 60 days are reserved for premium members. Unlock now for just ₹59/year!</p>
                 </div>
               </div>
               <PremiumButton />

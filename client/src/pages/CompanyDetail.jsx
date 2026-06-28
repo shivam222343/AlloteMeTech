@@ -9,6 +9,7 @@ import Spinner from '../components/common/Spinner';
 import { ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
 import { formatRelativeTime } from '../utils/helpers';
 import PremiumButton from '../components/common/PremiumButton';
+import ContinueLearningRecommendation from '../components/common/ContinueLearningRecommendation';
 
 const DifficultyBar = ({ distribution, total }) => {
   const items = [
@@ -144,6 +145,8 @@ const CompanyDetail = () => {
         </div>
       </div>
 
+      <ContinueLearningRecommendation />
+
       {/* Problems Section — login gate */}
       {!user ? (
         <div className="card p-10 flex flex-col items-center justify-center text-center gap-4 border-dashed">
@@ -172,7 +175,7 @@ const CompanyDetail = () => {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-text-primary">Unlock Recent {company.name} Questions</p>
-                  <p className="text-xs text-text-muted">Questions asked in the last 30 days and 60 days are reserved for premium members. Unlock now for just ₹49/year!</p>
+                  <p className="text-xs text-text-muted">Questions asked in the last 30 days and 60 days are reserved for premium members. Unlock now for just ₹59/year!</p>
                 </div>
               </div>
               <PremiumButton />

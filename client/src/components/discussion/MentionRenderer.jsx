@@ -42,6 +42,9 @@ const MentionRenderer = ({ content }) => {
           href={`https://leetcode.com/problems/${slug}`}
           target="_blank"
           rel="noopener noreferrer"
+          data-problem-slug={slug}
+          data-problem-title={displayLabel}
+          data-already-solved={false}
           className={`${colorClass} font-medium hover:underline`}
           onClick={(e) => e.stopPropagation()}
         >

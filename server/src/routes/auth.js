@@ -9,6 +9,7 @@ const {
   refreshToken,
   forgotPassword,
   googleCallback,
+  updatePassword,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 const { validate, registerSchema, loginSchema, forgotPasswordSchema } = require('../middleware/validate');
@@ -17,6 +18,7 @@ router.post('/register', validate(registerSchema), register);
 router.post('/login', validate(loginSchema), login);
 router.post('/logout', logout);
 router.post('/forgot-password', validate(forgotPasswordSchema), forgotPassword);
+router.put('/update-password', protect, updatePassword);
 router.get('/me', protect, getMe);
 
 // Google OAuth

@@ -215,3 +215,63 @@ exports.getDashboardStats = async (req, res) => {
     recentActivity,
   }, 'Dashboard stats fetched');
 };
+
+// ─── Get Recommendation ───────────────────────────────────────────────────────
+exports.getRecommendation = async (req, res) => {
+  const userId = req.user._id;
+
+  try {
+    const solvedProgress = await UserProgress.find({ user: userId, status: 'solved' })
+      .sort({ completedAt: -1 })
+      .populate('problem')
+      .lean();
+
+    if (!solvedProgress.length) {
+      return ApiResponse.success(res, { recommendation: null }, 'No solved questions yet');
+    }
+
+    const CompanyProblem = require('../models/CompanyProblem');
+
+    for (const record of solvedProgress) {
+      if (!record.problem) continue;
+
+      const companyMappings = await CompanyProblem.find({ problem: record.problem._id })
+        .populate('company')
+        .lean();
+
+      const validMappings = companyMappings.filter(m => m.company && m.company.isEnabled);
+      if (validMappings.length > 0) {
+        const selectedCompany = validMappings[0].company;
+
+        const companyProblems = await CompanyProblem.find({ company: selectedCompany._id }).distinct('problem');
+        const totalCompanyProblemsCount = companyProblems.length;
+
+        const userSolvedInCompanyCount = await UserProgress.countDocuments({
+          user: userId,
+          problem: { $in: companyProblems },
+          status: 'solved'
+        });
+
+        return ApiResponse.success(res, {
+          recommendation: {
+            company: {
+              name: selectedCompany.name,
+              slug: selectedCompany.slug,
+              logo: selectedCompany.logo,
+              industry: selectedCompany.industry
+            },
+            solvedCount: userSolvedInCompanyCount,
+            totalCount: totalCompanyProblemsCount,
+            lastSolvedProblemTitle: record.problem.title
+          }
+        }, 'Recommendation fetched');
+      }
+    }
+
+    return ApiResponse.success(res, { recommendation: null }, 'No companies found for solved problems');
+  } catch (error) {
+    console.error('[ERROR] getRecommendation:', error);
+    return ApiResponse.error(res, 'Error fetching recommendation');
+  }
+};
+

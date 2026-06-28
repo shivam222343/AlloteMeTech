@@ -3,20 +3,23 @@ import { useAuth } from '../../context/AuthContext';
 import { paymentApi } from '../../api';
 import { X, CheckCircle, ShieldCheck, Calendar, Building2, BarChart3, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 
 const PremiumModal = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [paying, setPaying] = useState(false);
-  const [config, setConfig] = useState({ originalPrice: 99, actualPrice: 49 });
+  const [config, setConfig] = useState({ originalPrice: 299, actualPrice: 59 });
   const [couponInput, setCouponInput] = useState('');
   const [activeCoupon, setActiveCoupon] = useState(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
 
-  const { user, fetchMe } = useAuth();
+  const { user, loading, fetchMe } = useAuth();
   const { isDark } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const [hasShownOnDashboard, setHasShownOnDashboard] = useState(false);
 
   // Listen to open-premium-modal custom events
   useEffect(() => {
@@ -24,6 +27,14 @@ const PremiumModal = () => {
     window.addEventListener('open-premium-modal', handleOpen);
     return () => window.removeEventListener('open-premium-modal', handleOpen);
   }, []);
+
+  // Show popup automatically at starting of dashboard page for logged-in non-premium users
+  useEffect(() => {
+    if (!loading && user && !user.isPremium && location.pathname === '/dashboard' && !hasShownOnDashboard) {
+      setIsOpen(true);
+      setHasShownOnDashboard(true);
+    }
+  }, [user, loading, location.pathname, hasShownOnDashboard]);
 
   // Fetch prices from backend settings when modal is opened
   useEffect(() => {
@@ -126,25 +137,25 @@ const PremiumModal = () => {
     }
   };
 
-  const finalPrice = activeCoupon 
+  const finalPrice = activeCoupon
     ? Math.round(config.actualPrice * (1 - activeCoupon.discountPercent / 100))
     : config.actualPrice;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
         onClick={() => !paying && setIsOpen(false)}
       />
 
       {/* Modal Card */}
       <div className="relative w-full max-w-md md:max-w-4xl bg-bg-card border border-border rounded-3xl shadow-card-hover overflow-hidden animate-slide-up theme-transition p-6 sm:p-8 flex flex-col justify-between">
-        
+
         {/* Close Button */}
-        <button 
+        <button
           disabled={paying}
-          onClick={() => setIsOpen(false)} 
+          onClick={() => setIsOpen(false)}
           className="absolute top-5 right-5 p-1.5 rounded-full hover:bg-bg-secondary text-text-muted transition-colors disabled:opacity-50 z-10"
         >
           <X className="w-4 h-4" />
@@ -152,7 +163,7 @@ const PremiumModal = () => {
 
         {/* Two Column Layout */}
         <div className="flex flex-col md:flex-row gap-8 flex-1 items-stretch">
-          
+
           {/* Left Column: Benefits */}
           <div className="hidden md:flex flex-1 flex-col justify-between">
             <div>
@@ -224,7 +235,7 @@ const PremiumModal = () => {
 
           {/* Right Column: Pricing & Payment Box */}
           <div className="w-full md:w-[350px] md:bg-bg-secondary/40 md:border md:border-border/80 md:rounded-2xl p-2 md:p-6 flex flex-col justify-between flex-shrink-0">
-            
+
             <div className="text-center pt-2">
               <div className="flex items-center justify-center gap-2">
                 <span className="h-px w-6 bg-border" />

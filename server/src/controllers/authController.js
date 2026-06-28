@@ -125,3 +125,31 @@ exports.forgotPassword = async (req, res) => {
   // TODO: Send email with token
   return ApiResponse.success(res, null, 'Password reset link sent to your email');
 };
+
+// ─── Update Password ──────────────────────────────────────────────────────────
+exports.updatePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 6) {
+    return ApiResponse.badRequest(res, 'New password must be at least 6 characters');
+  }
+
+  const user = await User.findById(req.user._id).select('+password');
+  if (!user) return ApiResponse.notFound(res, 'User not found');
+
+  // Verify current password if user has a password set (Oauth users might not have a password initially)
+  if (user.password) {
+    if (!currentPassword) {
+      return ApiResponse.badRequest(res, 'Current password is required');
+    }
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return ApiResponse.unauthorized(res, 'Incorrect current password');
+    }
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  return ApiResponse.success(res, null, 'Password updated successfully');
+};

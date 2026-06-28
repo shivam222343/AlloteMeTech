@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 
 const SocketContext = createContext();
 
@@ -9,6 +10,7 @@ export const useSocket = () => useContext(SocketContext);
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const { user, loading } = useAuth();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (loading) return; // wait for auth to resolve
@@ -27,12 +29,28 @@ export const SocketProvider = ({ children }) => {
       reconnectionDelay: 2000,
     });
 
+    const handleProgressUpdate = () => {
+      queryClient.invalidateQueries(['user-progress']);
+      queryClient.invalidateQueries(['user-progress-all']);
+      queryClient.invalidateQueries(['dashboard-stats']);
+      queryClient.invalidateQueries(['scheduled']);
+      queryClient.invalidateQueries(['favorites']);
+      queryClient.invalidateQueries(['company-problems']);
+      queryClient.invalidateQueries(['topic-problems']);
+      queryClient.invalidateQueries(['topics']);
+      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries(['recommendation']);
+    };
+
+    newSocket.on('progressUpdated', handleProgressUpdate);
+
     setSocket(newSocket);
 
     return () => {
+      newSocket.off('progressUpdated', handleProgressUpdate);
       newSocket.close();
     };
-  }, [user, loading]);
+  }, [user, loading, queryClient]);
 
   return (
     <SocketContext.Provider value={{ socket }}>
@@ -40,3 +58,4 @@ export const SocketProvider = ({ children }) => {
     </SocketContext.Provider>
   );
 };
+

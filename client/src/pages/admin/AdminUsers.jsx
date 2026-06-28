@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { adminApi } from '../../api';
 import { Pencil, Trash2, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Spinner from '../../components/common/Spinner';
-import { formatDate } from '../../utils/helpers';
+import { formatDate, formatLastActive } from '../../utils/helpers';
 
 const AdminUsers = () => {
   const qc = useQueryClient();
@@ -14,6 +15,7 @@ const AdminUsers = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users', page, search],
     queryFn: () => adminApi.getUsers({ page, limit: 20, search }),
+    refetchInterval: 15000, // Refetch user list every 15s to keep online status real-time
   });
 
   const updateMutation = useMutation({
@@ -54,38 +56,52 @@ const AdminUsers = () => {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
-                <tr key={u._id}>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      {u.isPremium ? (
-                        <div className="premium-avatar-container flex-shrink-0" style={{ padding: '2px' }}>
-                          {u.avatar ? (
-                            <img src={u.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-accent-blue/10 flex items-center justify-center text-[10px] font-bold text-accent-blue">
-                              {u.name?.[0]}
+              {users.map((u) => {
+                const isActiveOnline = formatLastActive(u.lastActivityDate) === 'Online';
+                return (
+                  <tr key={u._id}>
+                    <td>
+                      <Link to={`/admin/users/${u._id}`} className="flex items-center gap-2 hover:opacity-80 group">
+                        <div className="relative flex-shrink-0">
+                          {u.isPremium ? (
+                            <div className="premium-avatar-container" style={{ padding: '2px' }}>
+                              {u.avatar ? (
+                                <img src={u.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-6 h-6 rounded-full bg-accent-blue/10 flex items-center justify-center text-[10px] font-bold text-accent-blue">
+                                  {u.name?.[0]}
+                                </div>
+                              )}
                             </div>
+                          ) : (
+                            u.avatar ? (
+                              <img src={u.avatar} alt="" className="w-7 h-7 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-accent-blue/10 flex items-center justify-center text-xs font-medium text-accent-blue">
+                                {u.name?.[0]}
+                              </div>
+                            )
+                          )}
+                          {isActiveOnline && (
+                            <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent-green ring-2 ring-bg-card animate-pulse" />
                           )}
                         </div>
-                      ) : (
-                        u.avatar ? (
-                          <img src={u.avatar} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
-                        ) : (
-                          <div className="w-7 h-7 rounded-full bg-accent-blue/10 flex items-center justify-center text-xs font-medium text-accent-blue flex-shrink-0">
-                            {u.name?.[0]}
-                          </div>
-                        )
-                      )}
-                      <div>
-                        <p className="text-sm font-medium text-text-primary flex items-center gap-1">
-                          {u.name}
-                          {u.isPremium && <span className="text-[10px]" title="Premium User">👑</span>}
-                        </p>
-                        <p className="text-2xs text-text-faint">{u.email}</p>
-                      </div>
-                    </div>
-                  </td>
+                        <div>
+                          <p className="text-sm font-medium text-text-primary group-hover:text-accent-blue transition-colors flex items-center gap-1">
+                            {u.name}
+                            {u.isPremium && <span className="text-[10px]" title="Premium User">👑</span>}
+                          </p>
+                          <p className="text-2xs text-text-faint">{u.email}</p>
+                          <p className="text-[10px] mt-0.5 leading-none">
+                            {isActiveOnline ? (
+                              <span className="text-accent-green font-bold">Online</span>
+                            ) : (
+                              <span className="text-text-muted font-medium">Active: {formatLastActive(u.lastActivityDate)}</span>
+                            )}
+                          </p>
+                        </div>
+                      </Link>
+                    </td>
                   <td>
                     <select value={u.role} onChange={(e) => updateMutation.mutate({ id: u._id, data: { role: e.target.value } })}
                       className="text-xs bg-bg-secondary border border-border rounded px-2 py-1 text-text-muted focus:outline-none focus:border-accent-blue">
@@ -105,8 +121,9 @@ const AdminUsers = () => {
                       className="btn-icon btn-danger btn-sm" aria-label="Delete user"><Trash2 className="w-3.5 h-3.5" /></button>
                   </td>
                 </tr>
-              ))}
-            </tbody>
+              );
+            })}
+          </tbody>
           </table>
         </div>
       )}

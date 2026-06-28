@@ -9,6 +9,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 import { CheckCircle2, Calendar, Star, RotateCcw, Flame, ArrowRight, Code2, Target } from 'lucide-react';
 import { formatDate, formatRelativeTime } from '../utils/helpers';
 import { useSocket } from '../context/SocketContext';
+import ContinueLearningRecommendation from '../components/common/ContinueLearningRecommendation';
 
 const StatCard = ({ icon: Icon, label, value, color, to }) => (
   <Link to={to || '#'} className={`card p-4 hover:border-border-strong transition-colors ${to ? 'cursor-pointer' : ''}`}>
@@ -295,6 +296,8 @@ const Dashboard = () => {
         </Link>
       </div>
 
+      <ContinueLearningRecommendation />
+
       {/* Dashboard Top Row (Progress & Stats) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <LeetCodeProgress stats={stats} />
@@ -366,6 +369,9 @@ const Dashboard = () => {
                   <div className="flex items-center gap-2 min-w-0">
                     <DifficultyBadge difficulty={problem.difficulty} />
                     <a href={problem.leetcodeUrl} target="_blank" rel="noopener noreferrer"
+                      data-problem-id={problem._id}
+                      data-problem-title={problem.title}
+                      data-already-solved={false}
                       className="text-sm text-text-secondary hover:text-accent-blue truncate transition-colors">
                       {problem.title}
                     </a>

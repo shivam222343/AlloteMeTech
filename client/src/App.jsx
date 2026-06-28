@@ -7,6 +7,7 @@ import { SocketProvider } from './context/SocketContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ProtectedRoute, AdminRoute, GuestRoute } from './router/ProtectedRoute';
 import PremiumModal from './components/common/PremiumModal';
+import SolvedConfirmationModal from './components/common/SolvedConfirmationModal';
 
 // Layouts
 import MainLayout from './components/layout/MainLayout';
@@ -31,6 +32,7 @@ import AdminCompanies from './pages/admin/AdminCompanies';
 import AdminProblems from './pages/admin/AdminProblems';
 import AdminTopics from './pages/admin/AdminTopics';
 import AdminUsers from './pages/admin/AdminUsers';
+import AdminUserDetail from './pages/admin/AdminUserDetail';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
 import AdminPricing from './pages/admin/AdminPricing';
 
@@ -73,6 +75,7 @@ function App() {
             <BrowserRouter>
               <ScrollToTop />
               <PremiumModal />
+              <SolvedConfirmationModal />
               <Routes>
                 {/* ── Public routes with main layout ── */}
                 <Route element={<MainLayout />}>
@@ -100,6 +103,7 @@ function App() {
                   <Route path="problems" element={<AdminProblems />} />
                   <Route path="topics" element={<AdminTopics />} />
                   <Route path="users" element={<AdminUsers />} />
+                  <Route path="users/:id" element={<AdminUserDetail />} />
                   <Route path="analytics" element={<AdminAnalytics />} />
                   <Route path="pricing" element={<AdminPricing />} />
                 </Route>
