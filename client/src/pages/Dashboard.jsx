@@ -371,6 +371,7 @@ const Dashboard = () => {
                     <a href={problem.leetcodeUrl} target="_blank" rel="noopener noreferrer"
                       data-problem-id={problem._id}
                       data-problem-title={problem.title}
+                      data-problem-difficulty={problem.difficulty}
                       data-already-solved={false}
                       className="text-sm text-text-secondary hover:text-accent-blue truncate transition-colors">
                       {problem.title}
@@ -396,16 +397,26 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-2">
-              {stats.recentActivity.map(({ problem, completedAt }) => (
-                <div key={problem._id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-accent-green flex-shrink-0" />
-                    <DifficultyBadge difficulty={problem.difficulty} />
-                    <span className="text-sm text-text-secondary truncate">{problem.title}</span>
+              {stats.recentActivity.map((act) => {
+                const problem = act.problem;
+                const completedAt = act.completedAt;
+                const timeSpent = act.timeSpent;
+                return (
+                  <div key={problem._id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-accent-green flex-shrink-0" />
+                      <DifficultyBadge difficulty={problem.difficulty} />
+                      <span className="text-sm text-text-secondary truncate">{problem.title}</span>
+                      {timeSpent > 0 && (
+                        <span className="text-2xs text-text-faint whitespace-nowrap ml-1 bg-bg-secondary px-1.5 py-0.5 rounded border border-border/40 font-medium text-text-muted">
+                          took {timeSpent < 1 ? `${Math.round(timeSpent * 60)}s` : `${Math.round(timeSpent)}m`}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-text-faint whitespace-nowrap ml-2">{formatRelativeTime(completedAt)}</span>
                   </div>
-                  <span className="text-xs text-text-faint whitespace-nowrap ml-2">{formatRelativeTime(completedAt)}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

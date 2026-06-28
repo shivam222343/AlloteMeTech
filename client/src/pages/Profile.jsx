@@ -157,9 +157,18 @@ const Profile = () => {
                 <div className="flex items-center gap-2 min-w-0">
                   <DifficultyBadge difficulty={p.problem?.difficulty} />
                   <a href={p.problem?.leetcodeUrl} target="_blank" rel="noopener noreferrer"
+                    data-problem-id={p.problem?._id}
+                    data-problem-title={p.problem?.title}
+                    data-problem-difficulty={p.problem?.difficulty}
+                    data-already-solved={true}
                     className="text-sm text-text-secondary hover:text-accent-blue transition-colors truncate">
                     {p.problem?.title}
                   </a>
+                  {p.timeSpent > 0 && (
+                    <span className="text-2xs text-text-faint whitespace-nowrap ml-1 bg-bg-secondary px-1.5 py-0.5 rounded border border-border/40 font-medium text-text-muted">
+                      took {p.timeSpent < 1 ? `${Math.round(p.timeSpent * 60)}s` : `${Math.round(p.timeSpent)}m`}
+                    </span>
+                  )}
                 </div>
                 <span className="text-xs text-text-faint whitespace-nowrap ml-2">
                   {p.completedAt ? formatRelativeTime(p.completedAt) : '—'}
@@ -182,6 +191,10 @@ const Profile = () => {
                 <div className="flex items-center gap-2 min-w-0">
                   <DifficultyBadge difficulty={p.problem?.difficulty} />
                   <a href={p.problem?.leetcodeUrl} target="_blank" rel="noopener noreferrer"
+                    data-problem-id={p.problem?._id}
+                    data-problem-title={p.problem?.title}
+                    data-problem-difficulty={p.problem?.difficulty}
+                    data-already-solved={p.status === 'solved'}
                     className="text-sm text-text-secondary hover:text-accent-blue transition-colors truncate">
                     {p.problem?.title}
                   </a>

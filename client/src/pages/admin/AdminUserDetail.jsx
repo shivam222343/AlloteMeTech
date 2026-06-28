@@ -367,6 +367,7 @@ const AdminUserDetail = () => {
                         <th>Problem</th>
                         <th>Difficulty</th>
                         <th>Frequency</th>
+                        <th>Time Spent</th>
                         <th>Solved Date</th>
                       </tr>
                     </thead>
@@ -380,6 +381,13 @@ const AdminUserDetail = () => {
                           </td>
                           <td><DifficultyBadge difficulty={p.problem?.difficulty} /></td>
                           <td>{p.problem?.frequency || 0}</td>
+                          <td className="text-sm">
+                            {p.timeSpent > 0 ? (
+                              p.timeSpent < 1 ? `${Math.round(p.timeSpent * 60)}s` : `${Math.round(p.timeSpent)} mins`
+                            ) : (
+                              <span className="text-text-faint">—</span>
+                            )}
+                          </td>
                           <td className="text-xs text-text-faint">{p.completedAt ? formatDate(p.completedAt) : 'N/A'}</td>
                         </tr>
                       ))}

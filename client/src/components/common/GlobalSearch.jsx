@@ -58,6 +58,7 @@ const GlobalSearch = () => {
         localStorage.setItem('pending_leetcode_problem', JSON.stringify({
           id: r._id,
           title: r.title,
+          difficulty: r.difficulty || null,
           timestamp: Date.now()
         }));
         window.open(r.leetcodeUrl || `https://leetcode.com/problems/${r.slug}`, '_blank');
@@ -75,6 +76,7 @@ const GlobalSearch = () => {
       localStorage.setItem('pending_leetcode_problem', JSON.stringify({
         id: r._id,
         title: r.title,
+        difficulty: r.difficulty || null,
         timestamp: Date.now()
       }));
       window.open(r.leetcodeUrl || `https://leetcode.com/problems/${r.slug}`, '_blank');

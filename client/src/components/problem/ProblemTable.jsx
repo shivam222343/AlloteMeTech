@@ -191,7 +191,14 @@ const ProblemTable = ({ problems, progressMap = {}, onProgressUpdate }) => {
             const isLocked = p.isLocked;
             return (
               <tr key={p._id} className={isLocked ? 'opacity-85' : ''}>
-                <td><DifficultyBadge difficulty={p.difficulty} /></td>
+                <td>
+                  <div className="flex flex-col gap-0.5">
+                    <DifficultyBadge difficulty={p.difficulty} />
+                    <span className="text-[10px] text-text-faint whitespace-nowrap pl-1 font-medium">
+                      Est: {p.difficulty === 'Easy' ? 15 : p.difficulty === 'Medium' ? 35 : 45}m
+                    </span>
+                  </div>
+                </td>
                 <td>
                   {isLocked ? (
                     <div className="flex flex-col gap-1 select-none">
@@ -219,6 +226,7 @@ const ProblemTable = ({ problems, progressMap = {}, onProgressUpdate }) => {
                     <a href={p.leetcodeUrl} target="_blank" rel="noopener noreferrer"
                       data-problem-id={p._id}
                       data-problem-title={p.title}
+                      data-problem-difficulty={p.difficulty}
                       data-already-solved={progressMap[p._id] === 'solved'}
                       className="text-text-primary hover:text-accent-blue transition-colors font-medium text-sm">
                       {p.title}
@@ -252,6 +260,7 @@ const ProblemTable = ({ problems, progressMap = {}, onProgressUpdate }) => {
                       <a href={p.leetcodeUrl} target="_blank" rel="noopener noreferrer"
                         data-problem-id={p._id}
                         data-problem-title={p.title}
+                        data-problem-difficulty={p.difficulty}
                         data-already-solved={progressMap[p._id] === 'solved'}
                         className="inline-flex text-text-faint hover:text-accent-blue transition-colors" aria-label="Open on LeetCode">
                         <ExternalLink className="w-3.5 h-3.5" />
