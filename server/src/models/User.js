@@ -21,6 +21,11 @@ const userSchema = new mongoose.Schema(
     streak: { type: Number, default: 0 },
     lastActivityDate: { type: Date, default: null },
     totalSolved: { type: Number, default: 0 },
+    lastActiveCompany: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Company',
+      default: null
+    },
     totalPracticeTime: { type: Number, default: 0 }, // in minutes
     badges: [{ name: String, earnedAt: Date }],
     forgotPasswordToken: { type: String, select: false },

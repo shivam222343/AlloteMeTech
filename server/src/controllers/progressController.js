@@ -6,7 +6,23 @@ const ApiResponse = require('../utils/apiResponse');
 // ─── Upsert Progress ──────────────────────────────────────────────────────────
 exports.upsertProgress = async (req, res) => {
   const userId = req.user._id;
-  const { problemId, slug, status, isFavorite, notes, scheduledFor, timeSpent } = req.body;
+  const { problemId, slug, status, isFavorite, notes, scheduledFor, timeSpent, companySlug } = req.body;
+
+  // Track the last active company if user is solving questions inside a company context
+  let finalCompanySlug = companySlug;
+  if (!finalCompanySlug) {
+    const referer = req.headers.referer || '';
+    const match = referer.match(/\/companies\/([^/]+)/);
+    finalCompanySlug = match ? match[1] : null;
+  }
+
+  if (finalCompanySlug) {
+    const Company = require('../models/Company');
+    const companyDoc = await Company.findOne({ slug: finalCompanySlug });
+    if (companyDoc) {
+      await User.findByIdAndUpdate(userId, { lastActiveCompany: companyDoc._id });
+    }
+  }
 
   let targetProblemId = problemId;
   if (!targetProblemId && slug) {
@@ -221,54 +237,85 @@ exports.getRecommendation = async (req, res) => {
   const userId = req.user._id;
 
   try {
-    const solvedProgress = await UserProgress.find({ user: userId, status: 'solved' })
+    const userDoc = await User.findById(userId).populate('lastActiveCompany').lean();
+    let selectedCompany = null;
+    let lastSolvedProblemTitle = '';
+
+    if (userDoc && userDoc.lastActiveCompany && userDoc.lastActiveCompany.isEnabled) {
+      selectedCompany = userDoc.lastActiveCompany;
+      
+      // Get the last solved problem title for this company if any
+      const CompanyProblem = require('../models/CompanyProblem');
+      const companyProblems = await CompanyProblem.find({ company: selectedCompany._id }).distinct('problem');
+
+      const lastSolvedInCompany = await UserProgress.findOne({
+        user: userId,
+        status: 'solved',
+        problem: { $in: companyProblems }
+      })
       .sort({ completedAt: -1 })
       .populate('problem')
       .lean();
 
-    if (!solvedProgress.length) {
-      return ApiResponse.success(res, { recommendation: null }, 'No solved questions yet');
-    }
-
-    const CompanyProblem = require('../models/CompanyProblem');
-
-    for (const record of solvedProgress) {
-      if (!record.problem) continue;
-
-      const companyMappings = await CompanyProblem.find({ problem: record.problem._id })
-        .populate('company')
-        .lean();
-
-      const validMappings = companyMappings.filter(m => m.company && m.company.isEnabled);
-      if (validMappings.length > 0) {
-        const selectedCompany = validMappings[0].company;
-
-        const companyProblems = await CompanyProblem.find({ company: selectedCompany._id }).distinct('problem');
-        const totalCompanyProblemsCount = companyProblems.length;
-
-        const userSolvedInCompanyCount = await UserProgress.countDocuments({
-          user: userId,
-          problem: { $in: companyProblems },
-          status: 'solved'
-        });
-
-        return ApiResponse.success(res, {
-          recommendation: {
-            company: {
-              name: selectedCompany.name,
-              slug: selectedCompany.slug,
-              logo: selectedCompany.logo,
-              industry: selectedCompany.industry
-            },
-            solvedCount: userSolvedInCompanyCount,
-            totalCount: totalCompanyProblemsCount,
-            lastSolvedProblemTitle: record.problem.title
-          }
-        }, 'Recommendation fetched');
+      if (lastSolvedInCompany && lastSolvedInCompany.problem) {
+        lastSolvedProblemTitle = lastSolvedInCompany.problem.title;
       }
     }
 
-    return ApiResponse.success(res, { recommendation: null }, 'No companies found for solved problems');
+    // Fallback: search recently solved progress if no last active company was found
+    if (!selectedCompany) {
+      const solvedProgress = await UserProgress.find({ user: userId, status: 'solved' })
+        .sort({ completedAt: -1 })
+        .populate('problem')
+        .lean();
+
+      const CompanyProblem = require('../models/CompanyProblem');
+
+      for (const record of solvedProgress) {
+        if (!record.problem) continue;
+
+        const companyMappings = await CompanyProblem.find({ problem: record.problem._id })
+          .populate('company')
+          .lean();
+
+        const validMappings = companyMappings.filter(m => m.company && m.company.isEnabled);
+        if (validMappings.length > 0) {
+          selectedCompany = validMappings[0].company;
+          lastSolvedProblemTitle = record.problem.title;
+          break;
+        }
+      }
+    }
+
+    if (!selectedCompany) {
+      return ApiResponse.success(res, { recommendation: null }, 'No recommendation available');
+    }
+
+    // Count solved vs total questions for this user in this company
+    const CompanyProblem = require('../models/CompanyProblem');
+    const companyProblems = await CompanyProblem.find({ company: selectedCompany._id }).distinct('problem');
+    const totalCompanyProblemsCount = companyProblems.length;
+
+    const userSolvedInCompanyCount = await UserProgress.countDocuments({
+      user: userId,
+      problem: { $in: companyProblems },
+      status: 'solved'
+    });
+
+    return ApiResponse.success(res, {
+      recommendation: {
+        company: {
+          name: selectedCompany.name,
+          slug: selectedCompany.slug,
+          logo: selectedCompany.logo,
+          industry: selectedCompany.industry
+        },
+        solvedCount: userSolvedInCompanyCount,
+        totalCount: totalCompanyProblemsCount,
+        lastSolvedProblemTitle: lastSolvedProblemTitle || 'a question'
+      }
+    }, 'Recommendation fetched');
+
   } catch (error) {
     console.error('[ERROR] getRecommendation:', error);
     return ApiResponse.error(res, 'Error fetching recommendation');

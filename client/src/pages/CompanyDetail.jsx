@@ -9,7 +9,6 @@ import Spinner from '../components/common/Spinner';
 import { ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
 import { formatRelativeTime } from '../utils/helpers';
 import PremiumButton from '../components/common/PremiumButton';
-import ContinueLearningRecommendation from '../components/common/ContinueLearningRecommendation';
 
 const DifficultyBar = ({ distribution, total }) => {
   const items = [
@@ -144,8 +143,6 @@ const CompanyDetail = () => {
           </div>
         </div>
       </div>
-
-      <ContinueLearningRecommendation />
 
       {/* Problems Section — login gate */}
       {!user ? (

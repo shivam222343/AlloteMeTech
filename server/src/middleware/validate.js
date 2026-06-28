@@ -37,6 +37,7 @@ const progressSchema = Joi.object({
   notes: Joi.string().max(2000).allow(''),
   scheduledFor: Joi.date().allow(null),
   timeSpent: Joi.number().min(0),
+  companySlug: Joi.string().allow(null, ''),
 }).or('problemId', 'slug');
 
 module.exports = {

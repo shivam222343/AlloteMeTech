@@ -52,13 +52,18 @@ const SolvedConfirmationModal = () => {
         const problemTitle = anchor.getAttribute('data-problem-title') || anchor.textContent;
         const isAlreadySolved = anchor.getAttribute('data-already-solved') === 'true';
 
+        // Parse company slug if clicking from a company page
+        const match = window.location.pathname.match(/\/companies\/([^/]+)/);
+        const companySlug = match ? match[1] : null;
+
         if ((problemId || problemSlug) && problemTitle) {
           localStorage.setItem('pending_leetcode_problem', JSON.stringify({
             id: problemId || null,
             slug: problemSlug || null,
             title: problemTitle.trim(),
             timestamp: Date.now(),
-            type: isAlreadySolved ? 'revision' : 'solve'
+            type: isAlreadySolved ? 'revision' : 'solve',
+            companySlug: companySlug
           }));
         }
       }
@@ -78,7 +83,8 @@ const SolvedConfirmationModal = () => {
       await progressApi.upsert({
         problemId: pending.id || undefined,
         slug: pending.slug || undefined,
-        status: targetStatus
+        status: targetStatus,
+        companySlug: pending.companySlug || undefined
       });
 
       if (isRevision) {
