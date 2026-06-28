@@ -21,7 +21,7 @@ const Topics = () => {
   useEffect(() => {
     if (!socket) return;
     const handleProgressUpdate = () => {
-      queryClient.invalidateQueries(['topics']);
+      queryClient.invalidateQueries({ queryKey: ['topics'] });
     };
     socket.on('progressUpdated', handleProgressUpdate);
     return () => socket.off('progressUpdated', handleProgressUpdate);

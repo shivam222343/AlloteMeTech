@@ -246,7 +246,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (!socket) return;
     const handleProgressUpdate = () => {
-      queryClient.invalidateQueries(['dashboard-stats']);
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     };
     socket.on('progressUpdated', handleProgressUpdate);
     return () => socket.off('progressUpdated', handleProgressUpdate);

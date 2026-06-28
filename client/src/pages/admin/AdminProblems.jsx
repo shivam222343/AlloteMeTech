@@ -56,19 +56,19 @@ const AdminProblems = () => {
 
   const createMutation = useMutation({
     mutationFn: (data) => adminApi.createProblem(data),
-    onSuccess: () => { toast.success('Problem created'); qc.invalidateQueries(['admin-problems']); closeModal(); },
+    onSuccess: () => { toast.success('Problem created'); qc.invalidateQueries({ queryKey: ['admin-problems'] }); closeModal(); },
     onError: (e) => toast.error(e.response?.data?.message || 'Failed to create'),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => adminApi.updateProblem(id, data),
-    onSuccess: () => { toast.success('Problem updated'); qc.invalidateQueries(['admin-problems']); closeModal(); },
+    onSuccess: () => { toast.success('Problem updated'); qc.invalidateQueries({ queryKey: ['admin-problems'] }); closeModal(); },
     onError: (e) => toast.error(e.response?.data?.message || 'Failed to update'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => adminApi.deleteProblem(id),
-    onSuccess: () => { toast.success('Problem deleted'); qc.invalidateQueries(['admin-problems']); },
+    onSuccess: () => { toast.success('Problem deleted'); qc.invalidateQueries({ queryKey: ['admin-problems'] }); },
   });
 
   const closeModal = () => { setShowModal(false); setEditing(null); setForm(emptyForm); };

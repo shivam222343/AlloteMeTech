@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { progressApi } from '../../api';
 import toast from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, X } from 'lucide-react';
+import { CheckCircle2, X, RotateCcw } from 'lucide-react';
 
 const SolvedConfirmationModal = () => {
   const { user } = useAuth();
@@ -52,12 +52,13 @@ const SolvedConfirmationModal = () => {
         const problemTitle = anchor.getAttribute('data-problem-title') || anchor.textContent;
         const isAlreadySolved = anchor.getAttribute('data-already-solved') === 'true';
 
-        if ((problemId || problemSlug) && problemTitle && !isAlreadySolved) {
+        if ((problemId || problemSlug) && problemTitle) {
           localStorage.setItem('pending_leetcode_problem', JSON.stringify({
             id: problemId || null,
             slug: problemSlug || null,
             title: problemTitle.trim(),
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            type: isAlreadySolved ? 'revision' : 'solve'
           }));
         }
       }
@@ -69,22 +70,30 @@ const SolvedConfirmationModal = () => {
 
   if (!isOpen || !pending) return null;
 
+  const isRevision = pending?.type === 'revision';
+
   const handleYes = async () => {
     try {
+      const targetStatus = isRevision ? 'revision' : 'solved';
       await progressApi.upsert({
         problemId: pending.id || undefined,
         slug: pending.slug || undefined,
-        status: 'solved'
+        status: targetStatus
       });
-      toast.success(`Marked "${pending.title}" as solved! 🎉`);
+
+      if (isRevision) {
+        toast.success(`Moved "${pending.title}" to revision! 🔄`);
+      } else {
+        toast.success(`Marked "${pending.title}" as solved! 🎉`);
+      }
       
       // Invalidate queries to refresh lists / progress counters
-      queryClient.invalidateQueries(['user-progress']);
-      queryClient.invalidateQueries(['user-progress-all']);
-      queryClient.invalidateQueries(['dashboard-stats']);
-      queryClient.invalidateQueries(['scheduled']);
-      queryClient.invalidateQueries(['admin-users']);
-      queryClient.invalidateQueries(['recommendation']);
+      queryClient.invalidateQueries({ queryKey: ['user-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['user-progress-all'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['scheduled'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['recommendation'] });
     } catch (err) {
       toast.error('Failed to update problem status');
     } finally {
@@ -118,14 +127,24 @@ const SolvedConfirmationModal = () => {
         </button>
 
         <div className="flex flex-col items-center text-center space-y-4 pt-2">
-          <div className="w-14 h-14 rounded-2xl bg-accent-green/10 flex items-center justify-center border border-accent-green/20">
-            <CheckCircle2 className="w-7 h-7 text-accent-green animate-pulse" />
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${isRevision ? 'bg-accent-purple/10 border-accent-purple/20' : 'bg-accent-green/10 border-accent-green/20'}`}>
+            {isRevision ? (
+              <RotateCcw className="w-7 h-7 text-accent-purple animate-pulse" />
+            ) : (
+              <CheckCircle2 className="w-7 h-7 text-accent-green animate-pulse" />
+            )}
           </div>
 
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-text-primary">Solved Question?</h3>
+            <h3 className="text-base font-bold text-text-primary">
+              {isRevision ? 'Revise Question?' : 'Solved Question?'}
+            </h3>
             <p className="text-xs text-text-muted leading-relaxed px-2">
-              Did you solve <strong className="text-text-primary">"{pending.title}"</strong> on LeetCode?
+              {isRevision ? (
+                <>Did you want to move <strong className="text-text-primary">"{pending.title}"</strong> to your Revision Queue?</>
+              ) : (
+                <>Did you solve <strong className="text-text-primary">"{pending.title}"</strong> on LeetCode?</>
+              )}
             </p>
           </div>
 
@@ -138,9 +157,9 @@ const SolvedConfirmationModal = () => {
             </button>
             <button 
               onClick={handleYes} 
-              className="flex-1 px-4 py-2 text-xs font-semibold rounded-xl bg-accent-green text-bg-primary hover:opacity-90 transition-all active:scale-[0.98] shadow-sm"
+              className={`flex-1 px-4 py-2 text-xs font-semibold rounded-xl text-bg-primary hover:opacity-90 transition-all active:scale-[0.98] shadow-sm ${isRevision ? 'bg-accent-purple text-white' : 'bg-accent-green'}`}
             >
-              Yes, Solved
+              {isRevision ? 'Yes, Revise' : 'Yes, Solved'}
             </button>
           </div>
         </div>

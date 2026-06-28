@@ -42,19 +42,19 @@ const AdminTopics = () => {
 
   const createMutation = useMutation({
     mutationFn: (data) => adminApi.createTopic(data),
-    onSuccess: () => { toast.success('Topic created'); qc.invalidateQueries(['admin-topics']); closeModal(); },
+    onSuccess: () => { toast.success('Topic created'); qc.invalidateQueries({ queryKey: ['admin-topics'] }); closeModal(); },
     onError: (e) => toast.error(e.response?.data?.message || 'Failed to create'),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => adminApi.updateTopic(id, data),
-    onSuccess: () => { toast.success('Topic updated'); qc.invalidateQueries(['admin-topics']); closeModal(); },
+    onSuccess: () => { toast.success('Topic updated'); qc.invalidateQueries({ queryKey: ['admin-topics'] }); closeModal(); },
     onError: (e) => toast.error(e.response?.data?.message || 'Failed to update'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => adminApi.deleteTopic(id),
-    onSuccess: () => { toast.success('Topic deleted'); qc.invalidateQueries(['admin-topics']); },
+    onSuccess: () => { toast.success('Topic deleted'); qc.invalidateQueries({ queryKey: ['admin-topics'] }); },
   });
 
   const closeModal = () => { setShowModal(false); setEditing(null); setForm(emptyForm); };

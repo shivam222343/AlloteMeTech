@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, Calendar, CheckCircle2, RotateCcw, ChevronDown, Lock } from 'lucide-react';
 
@@ -111,6 +111,10 @@ const StatusDropdown = ({ problemId, currentStatus, onUpdate }) => {
   const close = useCallback(() => setOpen(false), []);
   useClickOutside(ref, close, open);
 
+  useEffect(() => {
+    setStatus(currentStatus || 'not_started');
+  }, [currentStatus]);
+
   if (!user) return <span className="text-text-faint text-xs">Login</span>;
 
   const handleSelect = async (val) => {
@@ -215,7 +219,7 @@ const ProblemTable = ({ problems, progressMap = {}, onProgressUpdate }) => {
                     <a href={p.leetcodeUrl} target="_blank" rel="noopener noreferrer"
                       data-problem-id={p._id}
                       data-problem-title={p.title}
-                      data-already-solved={p.status === 'solved'}
+                      data-already-solved={progressMap[p._id] === 'solved'}
                       className="text-text-primary hover:text-accent-blue transition-colors font-medium text-sm">
                       {p.title}
                     </a>
@@ -248,7 +252,7 @@ const ProblemTable = ({ problems, progressMap = {}, onProgressUpdate }) => {
                       <a href={p.leetcodeUrl} target="_blank" rel="noopener noreferrer"
                         data-problem-id={p._id}
                         data-problem-title={p.title}
-                        data-already-solved={p.status === 'solved'}
+                        data-already-solved={progressMap[p._id] === 'solved'}
                         className="inline-flex text-text-faint hover:text-accent-blue transition-colors" aria-label="Open on LeetCode">
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>

@@ -20,13 +20,13 @@ const AdminUsers = () => {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => adminApi.updateUser(id, data),
-    onSuccess: () => { toast.success('User updated'); qc.invalidateQueries(['admin-users']); },
+    onSuccess: () => { toast.success('User updated'); qc.invalidateQueries({ queryKey: ['admin-users'] }); },
     onError: () => toast.error('Failed to update user'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => adminApi.deleteUser(id),
-    onSuccess: () => { toast.success('User deleted'); qc.invalidateQueries(['admin-users']); },
+    onSuccess: () => { toast.success('User deleted'); qc.invalidateQueries({ queryKey: ['admin-users'] }); },
   });
 
   const users = data?.data?.data || [];

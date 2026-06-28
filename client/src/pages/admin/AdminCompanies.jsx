@@ -71,19 +71,19 @@ const AdminCompanies = () => {
 
   const createMutation = useMutation({
     mutationFn: (data) => adminApi.createCompany(data),
-    onSuccess: () => { toast.success('Company created'); qc.invalidateQueries(['companies-admin']); closeModal(); },
+    onSuccess: () => { toast.success('Company created'); qc.invalidateQueries({ queryKey: ['companies-admin'] }); closeModal(); },
     onError: (e) => toast.error(e.response?.data?.message || 'Failed'),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => adminApi.updateCompany(id, data),
-    onSuccess: () => { toast.success('Company updated'); qc.invalidateQueries(['companies-admin']); closeModal(); },
+    onSuccess: () => { toast.success('Company updated'); qc.invalidateQueries({ queryKey: ['companies-admin'] }); closeModal(); },
     onError: (e) => toast.error(e.response?.data?.message || 'Failed'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => adminApi.deleteCompany(id),
-    onSuccess: () => { toast.success('Company deleted'); qc.invalidateQueries(['companies-admin']); },
+    onSuccess: () => { toast.success('Company deleted'); qc.invalidateQueries({ queryKey: ['companies-admin'] }); },
   });
 
   const closeModal = () => { setShowModal(false); setEditing(null); setForm(emptyForm); };

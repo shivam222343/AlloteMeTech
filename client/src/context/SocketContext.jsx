@@ -30,16 +30,16 @@ export const SocketProvider = ({ children }) => {
     });
 
     const handleProgressUpdate = () => {
-      queryClient.invalidateQueries(['user-progress']);
-      queryClient.invalidateQueries(['user-progress-all']);
-      queryClient.invalidateQueries(['dashboard-stats']);
-      queryClient.invalidateQueries(['scheduled']);
-      queryClient.invalidateQueries(['favorites']);
-      queryClient.invalidateQueries(['company-problems']);
-      queryClient.invalidateQueries(['topic-problems']);
-      queryClient.invalidateQueries(['topics']);
-      queryClient.invalidateQueries(['companies']);
-      queryClient.invalidateQueries(['recommendation']);
+      queryClient.invalidateQueries({ queryKey: ['user-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['user-progress-all'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['scheduled'] });
+      queryClient.invalidateQueries({ queryKey: ['favorites'] });
+      queryClient.invalidateQueries({ queryKey: ['company-problems'] });
+      queryClient.invalidateQueries({ queryKey: ['topic-problems'] });
+      queryClient.invalidateQueries({ queryKey: ['topics'] });
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      queryClient.invalidateQueries({ queryKey: ['recommendation'] });
     };
 
     newSocket.on('progressUpdated', handleProgressUpdate);
