@@ -668,11 +668,14 @@ exports.bulkCreateJobs = async (req, res) => {
   return ApiResponse.success(res, { created, errors: errors.slice(0, 10) }, `Created ${created} of ${jobs.length} jobs`);
 };
 
-// ── Helper: detect local or cached Chrome/Chromium executable path ────────────
-function getPuppeteerExecutablePath() {
+// ── Helper: detect local, cached, or @sparticuz/chromium executable path ──────
+async function getPuppeteerExecutablePath(puppeteer) {
+  // 1. Explicit env var
   if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
     return process.env.PUPPETEER_EXECUTABLE_PATH;
   }
+
+  // 2. Known local browser paths (Windows / Edge / Linux system chrome)
   const candidatePaths = [
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
@@ -687,7 +690,7 @@ function getPuppeteerExecutablePath() {
     if (fs.existsSync(p)) return p;
   }
 
-  // Scan local project .cache/puppeteer recursively for downloaded Chrome binaries
+  // 3. Scan local project .cache/puppeteer recursively
   const cacheRoots = [
     path.join(__dirname, '../../.cache/puppeteer'),
     path.join(__dirname, '../../../.cache/puppeteer'),
@@ -715,6 +718,32 @@ function getPuppeteerExecutablePath() {
         }
       } catch {}
     }
+  }
+
+  // 4. In cloud Linux environments (like Render), use @sparticuz/chromium
+  try {
+    const rawChromium = require('@sparticuz/chromium');
+    const chromium = rawChromium.default || rawChromium;
+    if (chromium && typeof chromium.executablePath === 'function') {
+      const spartPath = await chromium.executablePath();
+      if (spartPath && fs.existsSync(spartPath)) {
+        console.log('[HireDoor Scraper] Found @sparticuz/chromium at:', spartPath);
+        return spartPath;
+      }
+    }
+  } catch (err) {
+    console.warn('[HireDoor Scraper] Note on @sparticuz/chromium:', err?.message);
+  }
+
+  // 5. Default puppeteer.executablePath()
+  if (puppeteer && typeof puppeteer.executablePath === 'function') {
+    try {
+      const p = puppeteer.executablePath();
+      const resolved = p && typeof p.then === 'function' ? await p : p;
+      if (resolved && fs.existsSync(resolved)) {
+        return resolved;
+      }
+    } catch {}
   }
 
   return undefined;
@@ -804,30 +833,32 @@ exports.syncHireDoor = async (req, res) => {
       ? 200
       : (mode === 'pages' ? targetPages.length * 25 : Math.min(Math.max(limitParam, 1), 200));
 
-    let executablePath = getPuppeteerExecutablePath();
-    if (!executablePath && typeof puppeteer.executablePath === 'function') {
-      try {
-        const p = puppeteer.executablePath();
-        const resolved = p && typeof p.then === 'function' ? await p : p;
-        if (resolved && fs.existsSync(resolved)) {
-          executablePath = resolved;
-        }
-      } catch (e) {
-        console.warn('[HireDoor Scraper] Note on default executablePath:', e?.message);
+    let chromiumArgs = [];
+    try {
+      const rawChromium = require('@sparticuz/chromium');
+      const chromium = rawChromium.default || rawChromium;
+      if (chromium && Array.isArray(chromium.args)) {
+        chromiumArgs = chromium.args;
       }
-    }
+    } catch {}
+
+    const executablePath = await getPuppeteerExecutablePath(puppeteer);
+
+    const baseArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+    ];
+
+    const launchArgs = Array.from(new Set([...chromiumArgs, ...baseArgs]));
 
     const launchOptions = {
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-      ]
+      args: launchArgs,
     };
     if (executablePath) {
       console.log('[HireDoor Scraper] Using browser executable at:', executablePath);
