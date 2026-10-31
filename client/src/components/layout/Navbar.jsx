@@ -13,6 +13,7 @@ import useClickOutside from '../../utils/useClickOutside';
 const navLinks = [
   { to: '/companies', label: 'Companies' },
   { to: '/topics', label: 'Topics' },
+  { to: '/jobs', label: 'Jobs' },
   { to: '/discussion', label: 'Forum' },
 ];
 

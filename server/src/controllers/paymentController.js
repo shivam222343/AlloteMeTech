@@ -19,7 +19,22 @@ const razorpay = new Razorpay({
 const getSettings = async () => {
   let settings = await PaymentSettings.findOne();
   if (!settings) {
-    settings = await PaymentSettings.create({ originalPrice: 299, actualPrice: 59 });
+    settings = await PaymentSettings.create({
+      monthlyPrice: 99,
+      threeMonthPrice: 249,
+      originalMonthlyPrice: 199,
+      originalThreeMonthPrice: 499,
+      originalPrice: 199,
+      actualPrice: 99,
+    });
+  } else if (!settings.monthlyPrice || settings.monthlyPrice !== 99) {
+    settings.monthlyPrice = 99;
+    settings.threeMonthPrice = 249;
+    settings.originalMonthlyPrice = 199;
+    settings.originalThreeMonthPrice = 499;
+    settings.actualPrice = 99;
+    settings.originalPrice = 199;
+    await settings.save();
   }
   return settings;
 };
@@ -72,18 +87,20 @@ exports.validateCoupon = async (req, res) => {
   }
 };
 
-// ─── Create Razorpay Order with optional Coupon Discount ──────────────────────
+// ─── Create Razorpay Order with optional Coupon Discount & Plan Type ──────────
 exports.createOrder = async (req, res) => {
-  const { couponCode } = req.body;
+  const { couponCode, planType = '1month' } = req.body;
 
   try {
     const settings = await getSettings();
-    let finalPrice = settings.actualPrice;
+    const isThreeMonths = planType === '3months';
+    const basePrice = isThreeMonths ? settings.threeMonthPrice : settings.monthlyPrice;
+    let finalPrice = basePrice;
 
     if (couponCode) {
       const coupon = await findValidCoupon(couponCode);
       if (coupon) {
-        finalPrice = settings.actualPrice * (1 - coupon.discountPercent / 100);
+        finalPrice = basePrice * (1 - coupon.discountPercent / 100);
       }
     }
 
@@ -93,6 +110,10 @@ exports.createOrder = async (req, res) => {
       amount: amountInPaise,
       currency: 'INR',
       receipt: `rcpt_${req.user._id.toString().slice(-8)}_${Date.now()}`,
+      notes: {
+        planType,
+        userId: req.user._id.toString(),
+      },
     };
 
     const order = await razorpay.orders.create(options);
@@ -102,8 +123,9 @@ exports.createOrder = async (req, res) => {
 
     return ApiResponse.success(res, {
       ...order,
-      actualPrice: settings.actualPrice,
-      discountedPrice: finalPrice
+      planType,
+      actualPrice: basePrice,
+      discountedPrice: finalPrice,
     }, 'Razorpay order created successfully');
   } catch (error) {
     console.error('[RAZORPAY] Create Order Error:', error);
@@ -113,7 +135,7 @@ exports.createOrder = async (req, res) => {
 
 // ─── Verify Razorpay Signature and Activate Subscription ──────────────────────
 exports.verifyPayment = async (req, res) => {
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planType = '1month' } = req.body;
 
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
     return ApiResponse.badRequest(res, 'Missing required payment verification parameters');
@@ -139,13 +161,21 @@ exports.verifyPayment = async (req, res) => {
       return ApiResponse.notFound(res, 'User account not found');
     }
 
+    const isThreeMonths = planType === '3months';
+    const durationDays = isThreeMonths ? 90 : 30;
+    const durationMs = durationDays * 24 * 60 * 60 * 1000;
+
+    const currentExpiry = (user.isPremium && user.premiumExpiresAt && new Date(user.premiumExpiresAt) > new Date())
+      ? new Date(user.premiumExpiresAt).getTime()
+      : Date.now();
+
     user.isPremium = true;
-    user.premiumExpiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 Year Expiry
+    user.premiumExpiresAt = new Date(currentExpiry + durationMs);
     user.premiumOrderId = razorpay_order_id;
     user.premiumPaymentId = razorpay_payment_id;
     await user.save();
 
-    console.log(`[SUBSCRIPTION] Premium activated for user ${user.email} until ${user.premiumExpiresAt}`);
+    console.log(`[SUBSCRIPTION] Premium activated for user ${user.email} (${planType}) until ${user.premiumExpiresAt}`);
 
     return ApiResponse.success(
       res,
@@ -159,7 +189,7 @@ exports.verifyPayment = async (req, res) => {
           premiumExpiresAt: user.premiumExpiresAt,
         },
       },
-      'Subscription successfully activated for 1 year!'
+      `Subscription successfully activated for ${durationDays} days!`
     );
   } catch (error) {
     console.error('[RAZORPAY] Verify Payment Error:', error);
@@ -169,18 +199,17 @@ exports.verifyPayment = async (req, res) => {
 
 // ─── ADMIN: Update Payment Pricing settings ───────────────────────────────────
 exports.updatePaymentConfig = async (req, res) => {
-  const { originalPrice, actualPrice } = req.body;
-  if (!originalPrice || !actualPrice) {
-    return ApiResponse.badRequest(res, 'Both originalPrice and actualPrice are required');
-  }
+  const { originalPrice, actualPrice, monthlyPrice, threeMonthPrice } = req.body;
 
   try {
     let settings = await PaymentSettings.findOne();
     if (!settings) {
       settings = new PaymentSettings();
     }
-    settings.originalPrice = Number(originalPrice);
-    settings.actualPrice = Number(actualPrice);
+    if (monthlyPrice !== undefined) settings.monthlyPrice = Number(monthlyPrice);
+    if (threeMonthPrice !== undefined) settings.threeMonthPrice = Number(threeMonthPrice);
+    if (originalPrice !== undefined) settings.originalPrice = Number(originalPrice);
+    if (actualPrice !== undefined) settings.actualPrice = Number(actualPrice);
     await settings.save();
 
     return ApiResponse.success(res, settings, 'Payment pricing updated successfully');

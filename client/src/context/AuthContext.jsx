@@ -32,6 +32,24 @@ export const AuthProvider = ({ children }) => {
     fetchMe();
   }, [fetchMe]);
 
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'token') {
+        const token = e.newValue;
+        if (!token) {
+          // Token removed in another tab (logout)
+          setUser(null);
+        } else {
+          // Token updated/set in another tab (login/switch user)
+          fetchMe();
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [fetchMe]);
+
   const login = async (credentials) => {
     const { data } = await authApi.login(credentials);
     if (data.data.accessToken) localStorage.setItem('token', data.data.accessToken);

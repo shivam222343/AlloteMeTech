@@ -5,9 +5,12 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { TabGuardProvider, useTabGuard } from './context/TabGuardContext';
 import { ProtectedRoute, AdminRoute, GuestRoute } from './router/ProtectedRoute';
 import PremiumModal from './components/common/PremiumModal';
 import SolvedConfirmationModal from './components/common/SolvedConfirmationModal';
+import DuplicateTabOverlay from './components/common/DuplicateTabOverlay';
+import Spinner from './components/common/Spinner';
 
 // Layouts
 import MainLayout from './components/layout/MainLayout';
@@ -35,6 +38,9 @@ import AdminUsers from './pages/admin/AdminUsers';
 import AdminUserDetail from './pages/admin/AdminUserDetail';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
 import AdminPricing from './pages/admin/AdminPricing';
+import Jobs from './pages/Jobs';
+import JobDetail from './pages/JobDetail';
+import AdminJobs from './pages/admin/AdminJobs';
 
 
 // 404
@@ -66,69 +72,94 @@ const queryClient = new QueryClient({
   },
 });
 
+const TabGuardConsumer = ({ children }) => {
+  const { isDuplicate, isChecking } = useTabGuard();
+
+  if (isChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg-primary">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (isDuplicate) {
+    return <DuplicateTabOverlay />;
+  }
+
+  return children;
+};
+
 function App() {
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <SocketProvider>
-            <BrowserRouter>
-              <ScrollToTop />
-              <PremiumModal />
-              <SolvedConfirmationModal />
-              <Routes>
-                {/* ── Public routes with main layout ── */}
-                <Route element={<MainLayout />}>
-                  <Route path="/" element={<Landing />} />
-                  <Route path="/companies" element={<Companies />} />
-                  <Route path="/companies/:slug" element={<CompanyDetail />} />
-                  <Route path="/topics" element={<Topics />} />
-                  <Route path="/topics/:slug" element={<TopicDetail />} />
-                  <Route path="/discussion" element={<Discussion />} />
+          <TabGuardProvider>
+            <TabGuardConsumer>
+              <SocketProvider>
+                <BrowserRouter>
+                  <ScrollToTop />
+                  <PremiumModal />
+                  <SolvedConfirmationModal />
+                  <Routes>
+                    {/* ── Public routes with main layout ── */}
+                    <Route element={<MainLayout />}>
+                    <Route path="/" element={<Landing />} />
+                    <Route path="/companies" element={<Companies />} />
+                    <Route path="/companies/:slug" element={<CompanyDetail />} />
+                    <Route path="/topics" element={<Topics />} />
+                    <Route path="/topics/:slug" element={<TopicDetail />} />
+                    <Route path="/discussion" element={<Discussion />} />
+                    <Route path="/jobs" element={<Jobs />} />
+                    <Route path="/jobs/:slug" element={<JobDetail />} />
 
-                  {/* ── Protected routes ── */}
-                  <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                </Route>
+                    {/* ── Protected routes ── */}
+                    <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                    <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                  </Route>
 
-                {/* ── Auth routes (no layout) ── */}
-                <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
-                <Route path="/signup" element={<GuestRoute><Signup /></GuestRoute>} />
-                <Route path="/forgot-password" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
+                  {/* ── Auth routes (no layout) ── */}
+                  <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
+                  <Route path="/signup" element={<GuestRoute><Signup /></GuestRoute>} />
+                  <Route path="/forgot-password" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
 
-                {/* ── Admin routes ── */}
-                <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-                  <Route index element={<AdminDashboard />} />
-                  <Route path="companies" element={<AdminCompanies />} />
-                  <Route path="problems" element={<AdminProblems />} />
-                  <Route path="topics" element={<AdminTopics />} />
-                  <Route path="users" element={<AdminUsers />} />
-                  <Route path="users/:id" element={<AdminUserDetail />} />
-                  <Route path="analytics" element={<AdminAnalytics />} />
-                  <Route path="pricing" element={<AdminPricing />} />
-                </Route>
+                  {/* ── Admin routes ── */}
+                  <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+                    <Route index element={<AdminDashboard />} />
+                    <Route path="companies" element={<AdminCompanies />} />
+                    <Route path="problems" element={<AdminProblems />} />
+                    <Route path="topics" element={<AdminTopics />} />
+                    <Route path="users" element={<AdminUsers />} />
+                    <Route path="users/:id" element={<AdminUserDetail />} />
+                    <Route path="analytics" element={<AdminAnalytics />} />
+                    <Route path="pricing" element={<AdminPricing />} />
+                    <Route path="jobs" element={<AdminJobs />} />
+                  </Route>
 
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
 
-            <Toaster
+              <Toaster
 
-              position="top-right"
-              toastOptions={{
-                style: {
-                  background: 'var(--bg-card)',
-                  color: 'var(--text-primary)',
-                  border: '1px solid var(--border)',
-                  fontSize: '13px',
-                  borderRadius: '6px',
-                },
-                success: { iconTheme: { primary: '#22C55E', secondary: 'var(--bg-card)' } },
-                error:   { iconTheme: { primary: '#EF4444', secondary: 'var(--bg-card)' } },
-                duration: 3000,
-              }}
-            />
-          </SocketProvider>
+                position="top-right"
+                toastOptions={{
+                  style: {
+                    background: 'var(--bg-card)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border)',
+                    fontSize: '13px',
+                    borderRadius: '6px',
+                  },
+                  success: { iconTheme: { primary: '#22C55E', secondary: 'var(--bg-card)' } },
+                  error:   { iconTheme: { primary: '#EF4444', secondary: 'var(--bg-card)' } },
+                  duration: 3000,
+                }}
+              />
+              </SocketProvider>
+            </TabGuardConsumer>
+          </TabGuardProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>

@@ -35,6 +35,10 @@ const userSchema = new mongoose.Schema(
     premiumOrderId: { type: String, default: null },
     premiumPaymentId: { type: String, default: null },
     currentSessionToken: { type: String, default: null },
+    dailyJobApplies: {
+      count: { type: Number, default: 0 },
+      date: { type: String, default: '' }, // YYYY-MM-DD
+    },
 
 
   },

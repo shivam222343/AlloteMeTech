@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Building2, Code2, Tag, Users, BarChart2, Shield, CreditCard, X } from 'lucide-react';
+import { LayoutDashboard, Building2, Code2, Tag, Users, BarChart2, Shield, CreditCard, Briefcase, X } from 'lucide-react';
 import Navbar from '../../components/layout/Navbar';
 
 const links = [
@@ -11,6 +11,7 @@ const links = [
   { to: '/admin/users', label: 'Users', icon: Users },
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart2 },
   { to: '/admin/pricing', label: 'Pricing & Coupons', icon: CreditCard },
+  { to: '/admin/jobs', label: 'Jobs', icon: Briefcase },
 ];
 
 const AdminLayout = () => {

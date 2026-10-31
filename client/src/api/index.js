@@ -91,7 +91,10 @@ export const publicApi = {
 export const paymentApi = {
   getConfig: () => api.get('/payment/config'),
   validateCoupon: (code) => api.post('/payment/validate-coupon', { code }),
-  createOrder: (couponCode) => api.post('/payment/create-order', { couponCode }),
+  createOrder: (payload) => {
+    const body = typeof payload === 'string' ? { couponCode: payload } : (payload || {});
+    return api.post('/payment/create-order', body);
+  },
   verify: (data) => api.post('/payment/verify', data),
   
   // Admin pricing and coupon management
@@ -101,5 +104,29 @@ export const paymentApi = {
   deleteCoupon: (id) => api.delete(`/payment/coupons/${id}`),
 };
 
-
+// ── Jobs ──────────────────────────────────────────────────────────────────────
+export const jobsApi = {
+  getAll: (params) => api.get('/jobs', { params }),
+  getOne: (slug) => api.get(`/jobs/${slug}`),
+  getApplyStatus: () => api.get('/jobs/apply/status'),
+  trackApply: (jobId) => api.post('/jobs/apply/track', { jobId }),
+  // Admin
+  adminGetAll: (params) => api.get('/jobs/admin/all', { params }),
+  create: (data) => api.post('/jobs', data),
+  update: (id, data) => api.put(`/jobs/${id}`, data),
+  delete: (id) => api.delete(`/jobs/${id}`),
+  bulkDelete: (ids) => api.post('/jobs/admin/bulk-delete', { ids }),
+  aiParse: (data) => api.post('/jobs/admin/ai-parse', data),
+  aiBulkParse: (data) => api.post('/jobs/admin/ai-bulk-parse', data),
+  bulkCreate: (jobs) => api.post('/jobs/admin/bulk-create', { jobs }),
+  syncHireDoor: (options = {}) => {
+    const payload = typeof options === 'number' ? { limit: options, mode: 'count' } : options;
+    return api.post('/jobs/admin/sync-hiredoor', payload);
+  },
+  stopSync: () => api.post('/jobs/admin/stop-sync'),
+  getCompanies: (params) => api.get('/jobs/admin/companies', { params }),
+  updateCompany: (tag, data) => api.put(`/jobs/admin/companies/${tag}`, data),
+  getSettings: () => api.get('/jobs/admin/settings'),
+  updateSettings: (data) => api.put('/jobs/admin/settings', data),
+};
 

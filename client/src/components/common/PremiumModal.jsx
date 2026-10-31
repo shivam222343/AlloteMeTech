@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { paymentApi } from '../../api';
-import { X, CheckCircle, ShieldCheck, Calendar, Building2, BarChart3, Lock } from 'lucide-react';
+import { X, CheckCircle, ShieldCheck, Calendar, Building2, BarChart3, Lock, Zap, FileText, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
@@ -9,7 +9,17 @@ import { useTheme } from '../../context/ThemeContext';
 const PremiumModal = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [paying, setPaying] = useState(false);
-  const [config, setConfig] = useState({ originalPrice: 299, actualPrice: 59 });
+  const [planType, setPlanType] = useState('1month'); // '1month' or '3months'
+  const [config, setConfig] = useState({
+    monthlyPrice: 99,
+    threeMonthPrice: 249,
+    originalMonthlyPrice: 199,
+    originalThreeMonthPrice: 499,
+    // fallback backward-compat fields
+    actualPrice: 99,
+    originalPrice: 199,
+  });
+  const [modalReason, setModalReason] = useState('');
   const [couponInput, setCouponInput] = useState('');
   const [activeCoupon, setActiveCoupon] = useState(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
@@ -21,9 +31,16 @@ const PremiumModal = () => {
 
   const [hasShownOnDashboard, setHasShownOnDashboard] = useState(false);
 
-  // Listen to open-premium-modal custom events
+  // Listen to open-premium-modal custom events (can include a custom message / reason)
   useEffect(() => {
-    const handleOpen = () => setIsOpen(true);
+    const handleOpen = (e) => {
+      if (e?.detail?.message) {
+        setModalReason(e.detail.message);
+      } else {
+        setModalReason('');
+      }
+      setIsOpen(true);
+    };
     window.addEventListener('open-premium-modal', handleOpen);
     return () => window.removeEventListener('open-premium-modal', handleOpen);
   }, []);
@@ -79,6 +96,18 @@ const PremiumModal = () => {
     }
   };
 
+  const currentBasePrice = planType === '3months'
+    ? (config.threeMonthPrice || 249)
+    : (config.monthlyPrice || 99);
+
+  const currentOriginalPrice = planType === '3months'
+    ? (config.originalThreeMonthPrice || 499)
+    : (config.originalMonthlyPrice || 199);
+
+  const finalPrice = activeCoupon
+    ? Math.round(currentBasePrice * (1 - activeCoupon.discountPercent / 100))
+    : currentBasePrice;
+
   const handleCheckout = async () => {
     if (!user) {
       toast.error('Please log in first to purchase Premium');
@@ -89,16 +118,20 @@ const PremiumModal = () => {
 
     setPaying(true);
     try {
-      // Securely create order on backend using coupon code if active
-      const { data } = await paymentApi.createOrder(activeCoupon?.code);
+      const { data } = await paymentApi.createOrder({
+        couponCode: activeCoupon?.code,
+        planType,
+      });
       const order = data.data;
+
+      const planTitle = planType === '3months' ? '3 Months' : '1 Month';
 
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_SbVLw7f5p7qeQN',
         amount: order.amount,
         currency: order.currency,
         name: 'AlloteMe Tech',
-        description: 'Premium Subscription (1 Year)',
+        description: `Premium Subscription (${planTitle})`,
         image: isDark ? '/AlloteMe_Logos.png' : '/AlloteMe_Logos _Light.png',
         order_id: order.id,
         handler: async (response) => {
@@ -108,10 +141,11 @@ const PremiumModal = () => {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
+              planType,
             });
             toast.success('Subscription activated! Welcome to Premium 👑', { id: verifyToast });
             setIsOpen(false);
-            await fetchMe(); // Refresh state context
+            await fetchMe();
           } catch (err) {
             toast.error(err.response?.data?.message || 'Verification failed. Contact support.', { id: verifyToast });
           }
@@ -137,199 +171,245 @@ const PremiumModal = () => {
     }
   };
 
-  const finalPrice = activeCoupon
-    ? Math.round(config.actualPrice * (1 - activeCoupon.discountPercent / 100))
-    : config.actualPrice;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
         onClick={() => !paying && setIsOpen(false)}
       />
 
       {/* Modal Card */}
-      <div className="relative w-full max-w-md md:max-w-4xl bg-bg-card border border-border rounded-3xl shadow-card-hover overflow-hidden animate-slide-up theme-transition p-6 sm:p-8 flex flex-col justify-between">
+      <div className="relative w-full max-w-md md:max-w-4xl bg-bg-card border border-border rounded-3xl shadow-card-hover overflow-hidden animate-slide-up theme-transition p-5 sm:p-7 flex flex-col justify-between my-auto">
 
         {/* Close Button */}
         <button
           disabled={paying}
           onClick={() => setIsOpen(false)}
-          className="absolute top-5 right-5 p-1.5 rounded-full hover:bg-bg-secondary text-text-muted transition-colors disabled:opacity-50 z-10"
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 p-1.5 rounded-full hover:bg-bg-secondary text-text-muted transition-colors disabled:opacity-50 z-10"
         >
           <X className="w-4 h-4" />
         </button>
 
-        {/* Two Column Layout */}
-        <div className="flex flex-col md:flex-row gap-8 flex-1 items-stretch">
+        {/* Optional limit message banner */}
+        {modalReason && (
+          <div className="mb-4 p-3 rounded-xl bg-accent-purple/10 border border-accent-purple/25 flex items-center gap-2.5 text-xs text-text-primary">
+            <Lock className="w-4 h-4 text-accent-purple flex-shrink-0" />
+            <span className="font-semibold">{modalReason}</span>
+          </div>
+        )}
 
-          {/* Left Column: Benefits */}
-          <div className="hidden md:flex flex-1 flex-col justify-between">
+        {/* Two Column Layout */}
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8 flex-1 items-stretch">
+
+          {/* Left Column: Benefits & Features */}
+          <div className="flex-1 flex flex-col justify-between">
             <div>
               {/* Header: Dynamic Logo & Badges */}
               <div className="flex items-center gap-2 select-none">
                 <img
                   src={isDark ? "/AlloteMe_Logos.png" : "/AlloteMe_Logos _Light.png"}
                   alt="AlloteMe Tech"
-                  className="h-9 w-auto object-contain"
+                  className="h-8 sm:h-9 w-auto object-contain"
                 />
-                <span className="ml-1.5 px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-accent-purple/10 text-accent-purple border border-accent-purple/20 uppercase tracking-wider">Premium</span>
+                <span className="ml-1.5 px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-accent-purple/10 text-accent-purple border border-accent-purple/20 uppercase tracking-wider">Premium Plan</span>
               </div>
 
               {/* Title & Description */}
-              <h2 className="text-3xl sm:text-4xl font-black text-text-primary tracking-tight mt-6 mb-2 leading-tight">
-                Upgrade Your<br />Preparation.
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-text-primary tracking-tight mt-4 sm:mt-5 mb-2 leading-tight">
+                AlloteMe Tech + Jobs Premium.
               </h2>
-              <p className="text-sm text-text-muted leading-relaxed max-w-md">
-                Get instant access to full analytics, recent questions, and targeted company metrics.
+              <p className="text-xs sm:text-sm text-text-muted leading-relaxed max-w-md">
+                Everything you need to practice coding questions, match jobs, and apply unlimited every day with automation.
               </p>
 
-              {/* Benefits list with custom SVG badges */}
-              <div className="mt-8 space-y-5">
-                {/* Benefit 1 */}
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-accent-purple/10 border border-accent-purple/20 flex items-center justify-center text-accent-purple flex-shrink-0">
-                    <Calendar className="w-5 h-5" />
+              {/* Benefits list */}
+              <div className="mt-5 sm:mt-6 space-y-3.5">
+                {/* Benefit 1: Unlimited Applies */}
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                    <Zap className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-text-primary">450+ company wise recently asked questions access</h3>
-                    <p className="text-xs text-text-muted mt-0.5">Direct access to recent 30-day and 90-day questions.</p>
+                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">Apply unlimited everyday</h3>
+                    <p className="text-[11px] text-text-muted mt-0.5">No 5-job daily cap. Direct instant links to external career portals & forms.</p>
                   </div>
                 </div>
 
-                {/* Benefit 2 */}
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-500 flex-shrink-0">
-                    <Building2 className="w-5 h-5" />
+                {/* Benefit 2: Auto Apply Workflow */}
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-accent-purple/10 border border-accent-purple/20 flex items-center justify-center text-accent-purple flex-shrink-0">
+                    <Check className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-text-primary">Detailed company-wise interview frequency tracking</h3>
-                    <p className="text-xs text-text-muted mt-0.5">Know which companies are hiring and how often.</p>
+                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">Auto apply workflow with powerful automation</h3>
+                    <p className="text-[11px] text-text-muted mt-0.5">Streamline applications with smart auto-fill (daily limit 25 automated jobs).</p>
                   </div>
                 </div>
 
-                {/* Benefit 3 */}
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center text-accent-blue flex-shrink-0">
-                    <BarChart3 className="w-5 h-5" />
+                {/* Benefit 3: Resume Review & Matching */}
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0">
+                    <FileText className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-text-primary">Advanced analytics, schedules & progress pipelines</h3>
-                    <p className="text-xs text-text-muted mt-0.5">Track performance, plan smarter and improve faster.</p>
+                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">Resume review & Skill-specific job matching</h3>
+                    <p className="text-[11px] text-text-muted mt-0.5">Tailor your resume for ATS and find high-matching job roles instantly.</p>
+                  </div>
+                </div>
+
+                {/* Benefit 4: 450+ Company Interview Questions */}
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 flex-shrink-0">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">Everything included in earlier Tech AlloteMe plan</h3>
+                    <p className="text-[11px] text-text-muted mt-0.5">450+ company questions, frequency tracking, analytics, and smart schedules.</p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Bottom Highlight Box */}
-            <div className="bg-accent-purple/5 border border-accent-purple/10 rounded-xl p-4 flex items-start gap-3 mt-6">
-              <ShieldCheck className="w-5 h-5 text-accent-purple mt-0.5 flex-shrink-0" />
+            <div className="bg-accent-purple/5 border border-accent-purple/10 rounded-xl p-3 sm:p-3.5 flex items-start gap-2.5 mt-5">
+              <ShieldCheck className="w-4 h-4 text-accent-purple mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-xs font-bold text-accent-purple">One-time Payment. No Auto-renewal.</p>
-                <p className="text-2xs text-text-muted mt-0.5">Pay once and enjoy 1 year of premium access without any recurring charges.</p>
+                <p className="text-xs font-bold text-accent-purple">One-time payment • No auto-debit</p>
+                <p className="text-2xs text-text-muted mt-0.5">Pay once via Razorpay (UPI, Cards, NetBanking). Never auto-renews.</p>
               </div>
             </div>
-
           </div>
 
-          {/* Right Column: Pricing & Payment Box */}
-          <div className="w-full md:w-[350px] md:bg-bg-secondary/40 md:border md:border-border/80 md:rounded-2xl p-2 md:p-6 flex flex-col justify-between flex-shrink-0">
+          {/* Right Column: Pricing Selector & Checkout */}
+          <div className="w-full md:w-[360px] bg-bg-secondary/40 border border-border/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between flex-shrink-0">
 
-            <div className="text-center pt-2">
-              <div className="flex items-center justify-center gap-2">
-                <span className="h-px w-6 bg-border" />
-                <span className="text-2xs text-text-faint uppercase font-bold tracking-widest">Pricing Plan</span>
-                <span className="h-px w-6 bg-border" />
+            <div>
+              {/* Plan Duration Selector (1 Month vs 3 Months) */}
+              <div className="mb-4">
+                <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-2 text-center">
+                  Select Subscription Duration
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Option 1: 1 Month */}
+                  <button
+                    type="button"
+                    onClick={() => setPlanType('1month')}
+                    className={`p-3 rounded-xl border text-left transition-all relative ${
+                      planType === '1month'
+                        ? 'border-accent-purple bg-accent-purple/10 shadow-[0_0_15px_rgba(139,92,246,0.2)]'
+                        : 'border-border bg-bg-card hover:border-border-hover'
+                    }`}
+                  >
+                    <div className="text-xs font-bold text-text-primary">1 Month</div>
+                    <div className="text-lg font-black text-text-primary mt-0.5">₹{config.monthlyPrice || 99}</div>
+                    <div className="text-[10px] text-text-faint line-through">₹{config.originalMonthlyPrice || 199}</div>
+                  </button>
+
+                  {/* Option 2: 3 Months (Recommended) */}
+                  <button
+                    type="button"
+                    onClick={() => setPlanType('3months')}
+                    className={`p-3 rounded-xl border text-left transition-all relative ${
+                      planType === '3months'
+                        ? 'border-accent-purple bg-accent-purple/10 shadow-[0_0_15px_rgba(139,92,246,0.2)]'
+                        : 'border-border bg-bg-card hover:border-border-hover'
+                    }`}
+                  >
+                    <span className="absolute -top-2 right-2 px-1.5 py-0.2 text-[9px] font-extrabold uppercase rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-black shadow-sm">
+                      Best Value
+                    </span>
+                    <div className="text-xs font-bold text-text-primary">3 Months</div>
+                    <div className="text-lg font-black text-text-primary mt-0.5">₹{config.threeMonthPrice || 249}</div>
+                    <div className="text-[10px] text-text-faint line-through">₹{config.originalThreeMonthPrice || 499}</div>
+                  </button>
+                </div>
               </div>
-              <div className="flex items-baseline justify-center gap-1.5 mt-4 mb-2 flex-wrap">
-                {activeCoupon ? (
-                  <>
-                    <span className="text-xs text-text-faint line-through">₹{config.originalPrice}</span>
-                    <span className="text-sm text-text-muted line-through">₹{config.actualPrice}</span>
-                    <span className="text-5xl font-black text-text-primary tracking-tight">₹{finalPrice}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-sm text-text-muted line-through">₹{config.originalPrice}</span>
-                    <span className="text-5xl font-black text-text-primary tracking-tight">₹{config.actualPrice}</span>
-                  </>
+
+              {/* Price Display */}
+              <div className="text-center pt-1 pb-3">
+                <div className="flex items-baseline justify-center gap-1.5">
+                  <span className="text-xs text-text-muted line-through">₹{currentOriginalPrice}</span>
+                  {activeCoupon && (
+                    <span className="text-xs text-text-faint line-through">₹{currentBasePrice}</span>
+                  )}
+                  <span className="text-4xl font-black text-text-primary tracking-tight">₹{finalPrice}</span>
+                  <span className="text-xs text-text-muted">/ {planType === '3months' ? '3 months' : 'month'}</span>
+                </div>
+              </div>
+
+              {/* Dotted Line */}
+              <div className="border-t border-dashed border-border mb-3" />
+
+              {/* Quick Feature Checklist */}
+              <ul className="space-y-2 mb-4">
+                {[
+                  'Apply Unlimited Jobs Everyday',
+                  'Auto Apply Workflow (25/day limit)',
+                  'Resume Review & Improvement',
+                  'Skill Specific Job Matching',
+                  '450+ Company Interview Questions',
+                  'Interview Frequency & Analytics',
+                ].map((feat, i) => (
+                  <li key={i} className="flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-accent-green flex-shrink-0" />
+                    <span className="text-[11px] text-text-secondary font-medium">{feat}</span>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Coupon Code Section */}
+              <div className="mb-4 p-2.5 bg-bg-secondary/60 rounded-xl border border-border">
+                <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1">Coupon Code</label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value)}
+                    placeholder="e.g. DISCOUNT10"
+                    disabled={validatingCoupon || activeCoupon || paying}
+                    className="flex-1 text-xs py-1 px-2.5 rounded-lg border border-border bg-bg-primary focus:outline-none focus:ring-1 focus:ring-accent-purple uppercase font-semibold text-text-primary"
+                  />
+                  {activeCoupon ? (
+                    <button
+                      type="button"
+                      onClick={() => { setActiveCoupon(null); setCouponInput(''); }}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/5 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!couponInput || validatingCoupon || paying}
+                      onClick={handleApplyCoupon}
+                      className="px-3 py-1 text-xs font-semibold rounded-lg bg-accent-purple text-white hover:opacity-90 transition-all disabled:opacity-50"
+                    >
+                      {validatingCoupon ? '...' : 'Apply'}
+                    </button>
+                  )}
+                </div>
+                {activeCoupon && (
+                  <p className="text-[10px] text-accent-green font-bold mt-1 animate-pulse">
+                    ✓ Code {activeCoupon.code} applied! Saved {activeCoupon.discountPercent}%
+                  </p>
                 )}
-                <span className="text-xs text-text-muted">/ year</span>
               </div>
             </div>
 
-            {/* Dotted Line */}
-            <div className="border-t border-dashed border-border my-4" />
-
-            {/* Features checkmark list */}
-            <ul className="space-y-3.5 mb-4">
-              {[
-                'All Premium Features',
-                '450+ Company-wise Recent Questions',
-                'Recent 30 & 90-day Questions',
-                'Performance & Progress Tracking',
-                'Smart Schedules & Pipelines',
-                'Email Support'
-              ].map((feat, i) => (
-                <li key={i} className="flex items-center gap-2.5">
-                  <CheckCircle className="w-4 h-4 text-accent-green flex-shrink-0" />
-                  <span className="text-xs text-text-secondary font-semibold">{feat}</span>
-                </li>
-              ))}
-            </ul>
-
-            {/* Coupon Code Section */}
-            <div className="mb-6 p-3 bg-bg-secondary/60 rounded-xl border border-border">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1.5">Have a coupon code?</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value)}
-                  placeholder="e.g. LUNCH10"
-                  disabled={validatingCoupon || activeCoupon || paying}
-                  className="flex-1 text-xs py-1.5 px-2.5 rounded-lg border border-border bg-bg-primary focus:outline-none focus:ring-1 focus:ring-accent-purple uppercase font-semibold text-text-primary"
-                />
-                {activeCoupon ? (
-                  <button
-                    type="button"
-                    onClick={() => { setActiveCoupon(null); setCouponInput(''); }}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/5 transition-colors"
-                  >
-                    Remove
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={!couponInput || validatingCoupon || paying}
-                    onClick={handleApplyCoupon}
-                    className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-accent-purple text-white hover:opacity-90 transition-all disabled:opacity-50"
-                  >
-                    {validatingCoupon ? '...' : 'Apply'}
-                  </button>
-                )}
-              </div>
-              {activeCoupon && (
-                <p className="text-[10px] text-accent-green font-bold mt-1 animate-pulse">
-                  ✓ Code {activeCoupon.code} applied! Saved {activeCoupon.discountPercent}%
-                </p>
-              )}
-            </div>
-
-            {/* Secure Action Button (styled exactly like custom PremiumButton) */}
+            {/* Secure Action Button */}
             <div>
               <button
                 onClick={handleCheckout}
                 disabled={paying}
-                className="relative flex items-center gap-4 p-2.5 pr-5 rounded-2xl border border-accent-purple/35 bg-bg-card/50 hover:border-accent-purple/65 hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all duration-300 active:scale-[0.98] select-none text-left w-full disabled:opacity-50"
+                className="relative flex items-center gap-3 p-2.5 pr-4 rounded-2xl border border-accent-purple/35 bg-bg-card hover:border-accent-purple/65 hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all duration-300 active:scale-[0.98] select-none text-left w-full disabled:opacity-50 cursor-pointer"
               >
                 {/* Glow Spark */}
                 <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-amber-300 shadow-[0_0_10px_#fbbf24] animate-pulse" />
 
                 {/* Crown Icon Container */}
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-500 flex items-center justify-center flex-shrink-0 shadow-lg border border-white/10">
-                  <svg className="w-7 h-7 text-amber-300 drop-shadow-[0_2px_6px_rgba(251,191,36,0.6)]" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-500 flex items-center justify-center flex-shrink-0 shadow-lg border border-white/10">
+                  <svg className="w-6 h-6 text-amber-300 drop-shadow-[0_2px_6px_rgba(251,191,36,0.6)]" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M15 75 L85 75 L92 35 L70 52 L50 20 L30 52 L8 35 Z" fill="currentColor" />
                     <path d="M50 48 C50 53 53 53 53 53 C53 53 53 53 58 53 C53 53 53 58 50 58 C50 58 47 58 47 53 C47 53 47 53 42 53 C47 53 47 48 50 48 Z" fill="#8B5CF6" />
                   </svg>
@@ -337,11 +417,11 @@ const PremiumModal = () => {
 
                 {/* Text Column */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-extrabold tracking-tight bg-gradient-to-r from-amber-200 via-amber-300 to-yellow-500 bg-clip-text text-transparent leading-none">
+                  <h3 className="text-sm sm:text-base font-extrabold tracking-tight bg-gradient-to-r from-amber-200 via-amber-300 to-yellow-500 bg-clip-text text-transparent leading-none">
                     {paying ? 'Processing...' : `Pay ₹${finalPrice} Securely`}
                   </h3>
                   <p className="text-[9px] font-bold text-text-muted tracking-widest uppercase mt-1 leading-none">
-                    Start Your Membership
+                    {planType === '3months' ? '3 Months Access' : '1 Month Access'}
                   </p>
                 </div>
 
@@ -350,22 +430,16 @@ const PremiumModal = () => {
               </button>
 
               {/* Secured Text under button */}
-              <div className="text-center mt-3 space-y-0.5">
+              <div className="text-center mt-2.5 space-y-0.5">
                 <p className="text-[10px] text-text-faint flex items-center justify-center gap-1 font-medium">
-                  <ShieldCheck className="w-3.5 h-3.5 text-text-faint" /> Secured Payment by Razorpay.
+                  <ShieldCheck className="w-3.5 h-3.5 text-text-faint" /> Secured Razorpay Checkout.
                 </p>
-                <p className="text-[10px] text-text-faint font-medium">Subscription will not auto-renew.</p>
+                <p className="text-[10px] text-text-faint font-medium">No auto-renewal. 100% money-safe.</p>
               </div>
             </div>
 
           </div>
 
-        </div>
-
-        {/* Global Security Footer */}
-        <div className="hidden md:flex border-t border-border mt-8 pt-4 items-center justify-center gap-2 text-[11px] text-text-faint text-center w-full font-medium">
-          <ShieldCheck className="w-4 h-4 text-text-faint" />
-          <span>Your payment is 100% secure. We use industry-standard encryption to protect your data.</span>
         </div>
 
       </div>

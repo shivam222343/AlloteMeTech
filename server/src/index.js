@@ -100,6 +100,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin/github', githubRoutes);
 app.use('/api/discussion', discussionRoutes);
 app.use('/api/payment', require('./routes/payment'));
+app.use('/api/jobs', require('./routes/jobs'));
 
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
