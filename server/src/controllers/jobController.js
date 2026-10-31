@@ -668,7 +668,7 @@ exports.bulkCreateJobs = async (req, res) => {
   return ApiResponse.success(res, { created, errors: errors.slice(0, 10) }, `Created ${created} of ${jobs.length} jobs`);
 };
 
-// ── Helper: detect local Chrome/Edge executable path ─────────────────────────
+// ── Helper: detect local or cached Chrome/Chromium executable path ────────────
 function getPuppeteerExecutablePath() {
   if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
     return process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -686,6 +686,37 @@ function getPuppeteerExecutablePath() {
   for (const p of candidatePaths) {
     if (fs.existsSync(p)) return p;
   }
+
+  // Scan local project .cache/puppeteer recursively for downloaded Chrome binaries
+  const cacheRoots = [
+    path.join(__dirname, '../../.cache/puppeteer'),
+    path.join(__dirname, '../../../.cache/puppeteer'),
+    path.join(process.cwd(), '.cache/puppeteer'),
+    path.join(process.cwd(), 'server/.cache/puppeteer'),
+  ];
+  for (const root of cacheRoots) {
+    if (!fs.existsSync(root)) continue;
+    const stack = [root];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      try {
+        const entries = fs.readdirSync(current, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(current, entry.name);
+          if (entry.isDirectory()) {
+            stack.push(fullPath);
+          } else if (
+            entry.name === 'chrome' ||
+            entry.name === 'chrome.exe' ||
+            entry.name === 'chromium'
+          ) {
+            return fullPath;
+          }
+        }
+      } catch {}
+    }
+  }
+
   return undefined;
 }
 
@@ -773,12 +804,33 @@ exports.syncHireDoor = async (req, res) => {
       ? 200
       : (mode === 'pages' ? targetPages.length * 25 : Math.min(Math.max(limitParam, 1), 200));
 
-    const executablePath = getPuppeteerExecutablePath();
+    let executablePath = getPuppeteerExecutablePath();
+    if (!executablePath && typeof puppeteer.executablePath === 'function') {
+      try {
+        const p = puppeteer.executablePath();
+        const resolved = p && typeof p.then === 'function' ? await p : p;
+        if (resolved && fs.existsSync(resolved)) {
+          executablePath = resolved;
+        }
+      } catch (e) {
+        console.warn('[HireDoor Scraper] Note on default executablePath:', e?.message);
+      }
+    }
+
     const launchOptions = {
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+      ]
     };
     if (executablePath) {
+      console.log('[HireDoor Scraper] Using browser executable at:', executablePath);
       launchOptions.executablePath = executablePath;
     }
 
