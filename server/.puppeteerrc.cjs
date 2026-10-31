@@ -8,3 +8,4 @@ module.exports = {
   // so Render persists it across build and runtime environments.
   cacheDirectory: join(__dirname, '.cache', 'puppeteer'),
 };
+
