@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const Job = require('../models/Job');
 const Company = require('../models/Company');
 const JobSettings = require('../models/JobSettings');
