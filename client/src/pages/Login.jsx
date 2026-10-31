@@ -18,7 +18,8 @@ const Login = () => {
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname || '/dashboard';
+  const fromState = location.state?.from;
+  const from = (typeof fromState === 'string' ? fromState : (fromState?.pathname ? `${fromState.pathname}${fromState.search || ''}` : null)) || '/dashboard';
   const [showPw, setShowPw] = useState(false);
 
   useEffect(() => {

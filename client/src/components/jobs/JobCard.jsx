@@ -18,7 +18,7 @@ const MODE_COLORS = {
 };
 
 export default function JobCard({ job }) {
-  const { hasReachedLimit, handleApply } = useJobApply();
+  const { user, hasReachedLimit, handleApply } = useJobApply();
 
   // Priority 1: Uploaded company logo (from Company document)
   // Priority 2: Scraped company logo (job.companyLogo)
@@ -99,7 +99,15 @@ export default function JobCard({ job }) {
             <a
               href={`mailto:${email}`}
               className="truncate hover:underline"
-              onClick={e => e.stopPropagation()}
+              onClick={e => {
+                if (!user) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleApply(e, job);
+                } else {
+                  e.stopPropagation();
+                }
+              }}
               title={email}
             >
               {email}

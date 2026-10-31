@@ -12,7 +12,7 @@ function timeAgo(date) {
 
 export default function JobDetail() {
   const { slug } = useParams();
-  const { hasReachedLimit, handleApply } = useJobApply();
+  const { user, hasReachedLimit, handleApply } = useJobApply();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['job', slug],
     queryFn: () => jobsApi.getOne(slug).then(r => r.data),
@@ -121,7 +121,16 @@ export default function JobDetail() {
               )}
             </div>
             {companyEmail && (
-              <a href={`mailto:${companyEmail}`} className="text-xs text-text-muted hover:text-text-primary transition-colors">
+              <a
+                href={`mailto:${companyEmail}`}
+                onClick={(e) => {
+                  if (!user) {
+                    e.preventDefault();
+                    handleApply(e, job);
+                  }
+                }}
+                className="text-xs text-text-muted hover:text-text-primary transition-colors"
+              >
                 {companyEmail}
               </a>
             )}
@@ -145,7 +154,18 @@ export default function JobDetail() {
             {companyEmail && (
               <div className="flex items-center gap-1.5 text-accent-blue">
                 <Mail className="w-4 h-4" />
-                <a href={`mailto:${companyEmail}`} className="hover:underline font-medium">{companyEmail}</a>
+                <a
+                  href={`mailto:${companyEmail}`}
+                  onClick={(e) => {
+                    if (!user) {
+                      e.preventDefault();
+                      handleApply(e, job);
+                    }
+                  }}
+                  className="hover:underline font-medium"
+                >
+                  {companyEmail}
+                </a>
               </div>
             )}
             {job.contactPhone && (

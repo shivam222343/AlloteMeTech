@@ -1,15 +1,21 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { jobsApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
 export function useJobApply() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   const { data } = useQuery({
     queryKey: ['jobApplyStatus', user?._id],
     queryFn: async () => {
+      if (!user) {
+        return { hasReachedLimit: false, appliedCount: 0, dailyLimit: 5, remaining: 5, isPremium: false };
+      }
       try {
         const res = await jobsApi.getApplyStatus();
         return res?.data?.data || { hasReachedLimit: false, appliedCount: 0, dailyLimit: 5, remaining: 5, isPremium: false };
@@ -17,6 +23,7 @@ export function useJobApply() {
         return { hasReachedLimit: false, appliedCount: 0, dailyLimit: 5, remaining: 5, isPremium: false };
       }
     },
+    enabled: !!user,
     staleTime: 30000,
   });
 
@@ -34,6 +41,17 @@ export function useJobApply() {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
+    }
+
+    // Require login before applying
+    if (!user) {
+      toast('Please log in to apply for jobs', { icon: '🔐' });
+      navigate('/login', {
+        state: {
+          from: { pathname: location.pathname, search: location.search }
+        }
+      });
+      return;
     }
 
     if (hasReachedLimit) {
@@ -92,6 +110,7 @@ export function useJobApply() {
   };
 
   return {
+    user,
     status,
     hasReachedLimit,
     remaining: status.remaining,
