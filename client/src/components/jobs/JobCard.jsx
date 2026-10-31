@@ -17,7 +17,12 @@ const MODE_COLORS = {
   'On-site': 'text-text-muted bg-bg-secondary',
 };
 
-export default function JobCard({ job }) {
+export default function JobCard({
+  job,
+  isAdmin = false,
+  isSelected = false,
+  onToggleSelect,
+}) {
   const { user, hasReachedLimit, handleApply } = useJobApply();
 
   // Priority 1: Uploaded company logo (from Company document)
@@ -38,9 +43,31 @@ export default function JobCard({ job }) {
   const email = (rawEmail && !rawEmail.toLowerCase().includes('hiredoor') && !rawEmail.toLowerCase().includes('alloteme')) ? rawEmail : '';
 
   return (
-    <div className="card group flex flex-col gap-3 p-4 hover:border-accent-blue/40 transition-colors">
+    <div
+      className={`card group flex flex-col gap-3 p-4 transition-all relative ${
+        isSelected
+          ? 'border-accent-blue bg-accent-blue/5 shadow-[0_0_15px_rgba(59,130,246,0.18)] ring-1 ring-accent-blue/50'
+          : 'hover:border-accent-blue/40'
+      }`}
+    >
       {/* Company row */}
       <div className="flex items-start gap-3">
+        {isAdmin && (
+          <div
+            className="pt-1 flex-shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleSelect && onToggleSelect(job._id)}
+              className="w-4 h-4 rounded border-border text-accent-blue focus:ring-accent-blue/30 cursor-pointer accent-accent-blue"
+              title="Select job for WhatsApp bulk share"
+            />
+          </div>
+        )}
         <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-bg-secondary border border-border flex items-center justify-center p-1">
           {companyLogo ? (
             <img

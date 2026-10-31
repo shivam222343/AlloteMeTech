@@ -625,8 +625,8 @@ function ManageJobsTab() {
     if (selectedJobs.length === 0) return;
     const text =
       selectedJobs.length === 1
-        ? formatJobForWhatsApp(selectedJobs[0])
-        : formatMultipleJobsForWhatsApp(selectedJobs);
+        ? formatJobForWhatsApp(selectedJobs[0], null, { isUserShare: false })
+        : formatMultipleJobsForWhatsApp(selectedJobs, { isUserShare: false });
 
     navigator.clipboard.writeText(text).catch(() => {});
     shareOnWhatsApp(text);
@@ -637,8 +637,8 @@ function ManageJobsTab() {
     if (selectedJobs.length === 0) return;
     const text =
       selectedJobs.length === 1
-        ? formatJobForWhatsApp(selectedJobs[0])
-        : formatMultipleJobsForWhatsApp(selectedJobs);
+        ? formatJobForWhatsApp(selectedJobs[0], null, { isUserShare: false })
+        : formatMultipleJobsForWhatsApp(selectedJobs, { isUserShare: false });
 
     navigator.clipboard
       .writeText(text)
@@ -647,7 +647,7 @@ function ManageJobsTab() {
   };
 
   const handleShareSingleWhatsApp = (job) => {
-    const text = formatJobForWhatsApp(job);
+    const text = formatJobForWhatsApp(job, null, { isUserShare: false });
     navigator.clipboard.writeText(text).catch(() => {});
     shareOnWhatsApp(text);
     toast.success(`Opening WhatsApp for ${job.title}!`);

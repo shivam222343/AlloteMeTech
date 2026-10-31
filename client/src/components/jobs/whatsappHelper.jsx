@@ -18,6 +18,8 @@ export function WhatsAppIcon({ className = 'w-4 h-4', ...props }) {
   );
 }
 
+export const TECH_ALLOTEME_HEADER = '🧑💻 Tech AlloteMe | Latest Job Opportunities 🧑💻';
+
 export function capitalizeWords(str) {
   if (!str) return 'Company';
   return str
@@ -30,6 +32,8 @@ export function capitalizeWords(str) {
 /**
  * Format single job into structured WhatsApp message:
  * 
+ * 🧑💻 Tech AlloteMe | Latest Job Opportunities 🧑💻
+ * 
  * Company Name | Job Title
  * 
  * Type: Internship
@@ -41,6 +45,7 @@ export function capitalizeWords(str) {
  */
 export function formatJobForWhatsApp(job, index = null, options = {}) {
   const isUserShare = typeof options === 'boolean' ? options : !!options?.isUserShare;
+  const includeHeader = options?.includeHeader !== undefined ? !!options.includeHeader : true;
   const rawCompany = job.companyName || job.company?.name || job.companyTag || 'Company';
   const company = capitalizeWords(rawCompany);
   const prefix = index !== null ? `${index}. ` : '';
@@ -78,7 +83,7 @@ export function formatJobForWhatsApp(job, index = null, options = {}) {
     }
   }
 
-  return `${titleLine}
+  const body = `${titleLine}
 
 Type: ${job.jobType || 'Full-time'}
 Work Mode: ${job.workMode || 'Remote'}
@@ -86,15 +91,34 @@ Eligibility: ${eligibility}
 Package/Stipend: ${packageStipend}
 Location: ${location}
 Apply: ${apply}`;
+
+  if (includeHeader) {
+    return `${TECH_ALLOTEME_HEADER}\n\n${body}`;
+  }
+  return body;
 }
 
 /**
  * Format multiple jobs for WhatsApp with numbering (1., 2., ...) and clean separators
  */
-export function formatMultipleJobsForWhatsApp(jobs) {
-  return jobs
-    .map((job, idx) => formatJobForWhatsApp(job, idx + 1))
+export function formatMultipleJobsForWhatsApp(jobs, options = {}) {
+  const isUserShare = typeof options === 'boolean' ? options : !!options?.isUserShare;
+  const includeHeader = options?.includeHeader !== undefined ? !!options.includeHeader : true;
+
+  const formattedJobs = jobs
+    .map((job, idx) =>
+      formatJobForWhatsApp(job, idx + 1, {
+        ...options,
+        isUserShare,
+        includeHeader: false,
+      })
+    )
     .join('\n\n───────────────────────────────\n\n');
+
+  if (includeHeader) {
+    return `${TECH_ALLOTEME_HEADER}\n\n${formattedJobs}`;
+  }
+  return formattedJobs;
 }
 
 /**
