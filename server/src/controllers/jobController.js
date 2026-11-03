@@ -1089,8 +1089,8 @@ exports.syncHireDoor = async (req, res) => {
         });
 
         try {
-          await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 35000 });
-          await sleep(2500);
+          await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+          await sleep(2000);
 
           // Ensure vertical toggle matches selected category on HireDoor
           await page.evaluate((targetCategory) => {
@@ -1145,8 +1145,8 @@ exports.syncHireDoor = async (req, res) => {
         });
         
         try {
-          await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 35000 });
-          await sleep(2500);
+          await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+          await sleep(2000);
 
           // Ensure vertical toggle matches selected category on HireDoor
           await page.evaluate((targetCategory) => {
@@ -1214,12 +1214,14 @@ exports.syncHireDoor = async (req, res) => {
     let processedCount = 0;
     const errors = [];
 
-    // 3. For each unique new job card: open detail page, scrape info, click Apply Now to get application link
+    // 3. For each unique new job card: open detail page in isolated tab, scrape info, click Apply Now
     for (const jobUrl of jobUrls) {
       if (isSyncCancelled) {
         logScraper('Sync cancelled by admin. Exiting job scraping loop.', 'warn');
         break;
       }
+      let jobPage = null;
+      let targetListener = null;
       try {
         processedCount++;
         logScraper(`[${processedCount}/${jobUrls.length}] Opening: ${jobUrl}`, 'info', {
@@ -1227,12 +1229,15 @@ exports.syncHireDoor = async (req, res) => {
           currentStep: `Scraping job ${processedCount}/${jobUrls.length}`,
         });
 
-        await page.goto(jobUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-        await sleep(2000);
+        // Use dedicated tab for each job detail to prevent tab corruption, hung sockets, or memory accumulation
+        jobPage = await browser.newPage();
+        await jobPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        jobPage.setDefaultNavigationTimeout(20000);
+        jobPage.setDefaultTimeout(20000);
 
         // Set up target listener to capture the external apply URL on click
         let externalApplyUrl = null;
-        const targetListener = async (target) => {
+        targetListener = async (target) => {
           try {
             const url = target.url();
             if (url && url !== 'about:blank' && !url.includes('hiredoor.in')) {
@@ -1247,8 +1252,18 @@ exports.syncHireDoor = async (req, res) => {
         browser.on('targetcreated', targetListener);
         browser.on('targetchanged', targetListener);
 
+        // Fast domcontentloaded navigation so tracking beacons / analytics don't cause 30s timeout
+        try {
+          await jobPage.goto(jobUrl, { waitUntil: 'domcontentloaded', timeout: 18000 });
+        } catch (navErr) {
+          logScraper(`Initial navigation note on ${jobUrl}: ${navErr.message}. Retrying...`, 'warn');
+          await sleep(1000);
+          await jobPage.goto(jobUrl, { waitUntil: 'load', timeout: 12000 }).catch(() => {});
+        }
+        await sleep(1500);
+
         // Extract detailed data from the job page
-        const jobData = await page.evaluate(() => {
+        const jobData = await jobPage.evaluate(() => {
           const title = document.querySelector('h1')?.innerText?.trim() || '';
 
           // Find company name
@@ -1350,21 +1365,25 @@ exports.syncHireDoor = async (req, res) => {
         });
 
         // Click Apply Now button to trigger external tab / modal
-        await page.evaluate(() => {
+        await jobPage.evaluate(() => {
           const btns = Array.from(document.querySelectorAll('button, a')).filter(el => 
             el.innerText.trim().toLowerCase().includes('apply now')
           );
           if (btns.length > 0) btns[0].click();
         });
 
-        await sleep(3500);
-        browser.off('targetcreated', targetListener);
-        browser.off('targetchanged', targetListener);
+        await sleep(2500);
+
+        if (targetListener) {
+          browser.off('targetcreated', targetListener);
+          browser.off('targetchanged', targetListener);
+          targetListener = null;
+        }
 
         // If popup was blocked or delayed, check for any external company link on the page
         if (!externalApplyUrl || externalApplyUrl.includes('hiredoor.in')) {
           try {
-            const pageExtLink = await page.evaluate(() => {
+            const pageExtLink = await jobPage.evaluate(() => {
               const links = Array.from(document.querySelectorAll('a[href]'))
                 .map(a => a.href)
                 .filter(h => h && !h.includes('hiredoor.in') && !h.includes('javascript:') && !h.includes('whatsapp') && !h.includes('linkedin') && !h.includes('telegram') && !h.includes('alloteme'));
@@ -1475,6 +1494,14 @@ exports.syncHireDoor = async (req, res) => {
         logScraper(`Error scraping ${jobUrl}: ${jobErr.message}`, 'error');
         errors.push(`${jobUrl}: ${jobErr.message}`);
         activeSyncState.errorsCount = errors.length;
+      } finally {
+        if (targetListener) {
+          browser.off('targetcreated', targetListener);
+          browser.off('targetchanged', targetListener);
+        }
+        if (jobPage) {
+          await jobPage.close().catch(() => {});
+        }
       }
     }
 
