@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Sparkles, PenLine, List, Loader2, Trash2, RefreshCw, Plus,
   ExternalLink, CheckCircle2, AlertCircle, X, MapPin, Briefcase,
   Banknote, ChevronDown, ChevronUp, Send, Eye, EyeOff,
   Building2, Check, Mail, Phone, Upload, Image, Link2, Key, Copy,
+  Terminal, Clock,
 } from 'lucide-react';
 import { jobsApi } from '../../api';
 import toast from 'react-hot-toast';
@@ -20,6 +21,7 @@ const WORK_MODES = ['Remote', 'Hybrid', 'On-site'];
 
 const EMPTY_FORM = {
   title: '', companyTag: '', companyName: '', companyLogo: '',
+  category: 'Tech',
   location: 'Remote', workMode: 'Remote', jobType: 'Full-time',
   salary: '', experience: '', eligibleBatch: '',
   description: '', responsibilities: [], requirements: [],
@@ -127,6 +129,12 @@ function JobForm({ initialData = EMPTY_FORM, onSubmit, isLoading, submitLabel = 
         </FieldRow>
         <FieldRow label="Company Logo URL (fallback)">
           <input className="input w-full text-sm" value={form.companyLogo} onChange={e => set('companyLogo', e.target.value)} placeholder="https://..." />
+        </FieldRow>
+        <FieldRow label="Category" required>
+          <select className="input w-full text-sm font-medium" value={form.category || 'Tech'} onChange={e => set('category', e.target.value)}>
+            <option value="Tech">💻 Tech Job</option>
+            <option value="Non-Tech">💼 Non-Tech Job</option>
+          </select>
         </FieldRow>
         <FieldRow label="Job Type" required>
           <select className="input w-full text-sm" value={form.jobType} onChange={e => set('jobType', e.target.value)}>
@@ -543,20 +551,241 @@ function ManualFormTab() {
   );
 }
 
+// ── Component: Live Scraper Terminal Modal ─────────────────────────────────────
+function LiveSyncTerminal({ isOpen, onClose, syncState, syncLogs, syncing, onStopSync, stoppingSync }) {
+  const terminalEndRef = useRef(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  useEffect(() => {
+    if (autoScroll && terminalEndRef.current) {
+      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [syncLogs, autoScroll]);
+
+  if (!isOpen) return null;
+
+  const handleCopyLogs = () => {
+    const text = syncLogs.map(l => `[${l.time}] ${l.message}`).join('\n');
+    navigator.clipboard.writeText(text)
+      .then(() => toast.success('Terminal logs copied to clipboard!'))
+      .catch(() => toast.error('Failed to copy logs'));
+  };
+
+  const statusColor = {
+    running: 'bg-accent-blue/20 text-accent-blue border-accent-blue/30',
+    completed: 'bg-accent-green/20 text-accent-green border-accent-green/30',
+    stopped: 'bg-accent-yellow/20 text-accent-yellow border-accent-yellow/30',
+    failed: 'bg-accent-red/20 text-accent-red border-accent-red/30',
+    idle: 'bg-bg-secondary text-text-muted border-border',
+  }[syncState?.status || (syncing ? 'running' : 'idle')];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-[#0f141c] border border-border/80 rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-text-primary">
+        {/* Terminal Window Titlebar */}
+        <div className="flex items-center justify-between px-4 py-3 bg-[#161b24] border-b border-border/60">
+          <div className="flex items-center gap-3">
+            {/* Mac style dots */}
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-[#ff5f56]" />
+              <span className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
+              <span className="w-3 h-3 rounded-full bg-[#27c93f]" />
+            </div>
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-accent-blue" />
+              <span className="font-mono text-xs font-semibold text-text-primary">
+                hiredoor-automation@alloteme:~
+              </span>
+            </div>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full uppercase font-bold border ${statusColor}`}>
+              {syncState?.status || (syncing ? 'RUNNING' : 'IDLE')}
+            </span>
+            {syncState?.category && (
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                syncState.category === 'Non-Tech'
+                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                  : 'bg-accent-blue/20 text-accent-blue border-accent-blue/40'
+              }`}>
+                {syncState.category === 'Non-Tech' ? '💼 Non-Tech Portal' : '💻 Tech Portal'}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopyLogs}
+              className="btn btn-ghost btn-sm text-xs font-mono text-text-muted hover:text-text-primary py-1 px-2 border border-border/50"
+              title="Copy all logs"
+            >
+              <Copy className="w-3 h-3" /> Copy
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn-icon btn-ghost text-text-muted hover:text-text-primary w-7 h-7"
+              title="Close terminal"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Live Counters */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-3 bg-[#111620] border-b border-border/40 text-xs font-mono">
+          <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
+            <div className="text-[10px] text-text-faint uppercase">Queued / Target</div>
+            <div className="text-sm font-bold text-text-primary mt-0.5">
+              {syncState?.totalToScrape || 0}
+            </div>
+          </div>
+          <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
+            <div className="text-[10px] text-text-faint uppercase">Processed</div>
+            <div className="text-sm font-bold text-accent-blue mt-0.5">
+              {syncState?.processedCount || 0}
+            </div>
+          </div>
+          <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
+            <div className="text-[10px] text-text-faint uppercase">Saved to DB</div>
+            <div className="text-sm font-bold text-accent-green mt-0.5">
+              {syncState?.savedCount || 0}
+            </div>
+          </div>
+          <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
+            <div className="text-[10px] text-text-faint uppercase">Duplicates Skipped</div>
+            <div className="text-sm font-bold text-accent-yellow mt-0.5">
+              {syncState?.duplicateCount || 0}
+            </div>
+          </div>
+          <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
+            <div className="text-[10px] text-text-faint uppercase">Errors</div>
+            <div className="text-sm font-bold text-accent-red mt-0.5">
+              {syncState?.errorsCount || 0}
+            </div>
+          </div>
+        </div>
+
+        {/* Current status banner */}
+        {syncState?.currentStep && (
+          <div className="px-4 py-2 bg-[#141b26] border-b border-border/40 flex items-center justify-between gap-3 text-xs font-mono">
+            <div className="flex items-center gap-2 truncate text-accent-blue">
+              <span className="w-2 h-2 rounded-full bg-accent-blue animate-ping" />
+              <span className="truncate">{syncState.currentStep}</span>
+            </div>
+            {syncing && (
+              <button
+                type="button"
+                onClick={onStopSync}
+                disabled={stoppingSync}
+                className="btn btn-sm py-1 px-3 bg-red-600/90 hover:bg-red-600 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 flex-shrink-0 shadow-sm"
+              >
+                <X className="w-3.5 h-3.5" />
+                {stoppingSync ? 'Stopping...' : 'Stop Sync'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Terminal Screen with Monospace logs */}
+        <div className="flex-1 p-4 font-mono text-xs overflow-y-auto bg-[#0a0d14] space-y-1.5 min-h-[300px] max-h-[500px]">
+          {syncLogs.length === 0 ? (
+            <div className="text-text-faint py-8 text-center italic">
+              Terminal idle. Start a sync or wait for background automation...
+            </div>
+          ) : (
+            syncLogs.map((log) => {
+              const colorClass = {
+                step: 'text-cyan-400 font-bold',
+                success: 'text-emerald-400 font-semibold',
+                warn: 'text-amber-400',
+                error: 'text-red-400 font-bold',
+                info: 'text-slate-300',
+              }[log.type] || 'text-slate-300';
+
+              return (
+                <div key={log.id} className="flex items-start gap-2.5 leading-relaxed hover:bg-white/[0.02] px-1 py-0.5 rounded">
+                  <span className="text-slate-500 flex-shrink-0 select-none">[{log.time}]</span>
+                  <span className="text-slate-600 select-none">&gt;</span>
+                  <span className={`break-all ${colorClass}`}>{log.message}</span>
+                </div>
+              );
+            })
+          )}
+          <div ref={terminalEndRef} />
+        </div>
+
+        {/* Footer controls */}
+        <div className="flex items-center justify-between px-4 py-2.5 bg-[#161b24] border-t border-border/60 text-xs font-mono">
+          <label className="flex items-center gap-2 cursor-pointer text-text-muted hover:text-text-primary select-none">
+            <input
+              type="checkbox"
+              checked={autoScroll}
+              onChange={(e) => setAutoScroll(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-border"
+            />
+            <span>Auto-scroll terminal</span>
+          </label>
+          <div className="text-[11px] text-text-faint">
+            {syncLogs.length} entries recorded
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Tab 3: Manage Jobs ────────────────────────────────────────────────────────
 function ManageJobsTab() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [editingJob, setEditingJob] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [stoppingSync, setStoppingSync] = useState(false);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncCategory, setSyncCategory] = useState('Tech'); // 'Tech' or 'Non-Tech'
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [syncLogs, setSyncLogs] = useState([]);
+  const [syncState, setSyncState] = useState(null);
   const [syncMode, setSyncMode] = useState('until_last_added'); // 'until_last_added', 'count', or 'pages'
   const [syncLimit, setSyncLimit] = useState(10);
   const [selectedPages, setSelectedPages] = useState([1, 2, 3, 4]);
   const [pagesInputText, setPagesInputText] = useState('1, 2, 3, 4');
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Poll sync status & live terminal logs when sync is running or terminal is open
+  useEffect(() => {
+    let intervalId;
+    const pollSyncStatus = async () => {
+      try {
+        const res = await jobsApi.getSyncStatus();
+        const data = res?.data?.data;
+        if (data) {
+          if (data.state) {
+            setSyncState(data.state);
+            if (data.state.isActive) {
+              setSyncing(true);
+            }
+          }
+          if (Array.isArray(data.logs)) {
+            setSyncLogs(data.logs);
+          }
+        }
+      } catch (e) {
+        // silent
+      }
+    };
+
+    if (syncing || terminalOpen) {
+      pollSyncStatus();
+      intervalId = setInterval(pollSyncStatus, 1200);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [syncing, terminalOpen]);
 
   const togglePageSelection = (p) => {
     setSelectedPages(prev => {
@@ -585,8 +814,8 @@ function ManageJobsTab() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-jobs', page, search],
-    queryFn: () => jobsApi.adminGetAll({ page, limit: 10, search }).then(r => r.data),
+    queryKey: ['admin-jobs', page, search, categoryFilter],
+    queryFn: () => jobsApi.adminGetAll({ page, limit: 10, search, category: categoryFilter }).then(r => r.data),
   });
 
   const jobs = data?.data || [];
@@ -696,8 +925,10 @@ function ManageJobsTab() {
     setSyncing(true);
     setStoppingSync(false);
     setSyncModalOpen(false);
+    setTerminalOpen(true);
     try {
       const res = await jobsApi.syncHireDoor({
+        category: syncCategory,
         mode: syncMode,
         limit: syncLimit,
         pages: syncMode === 'pages' ? selectedPages : undefined,
@@ -706,12 +937,13 @@ function ManageJobsTab() {
       if (wasCancelled) {
         toast(`Sync stopped. Saved ${saved} new jobs.`);
       } else if (stoppedAtDuplicate) {
-        toast.success(`Incremental sync: Saved ${saved} new jobs (stopped at last added job)!`);
+        toast.success(`Incremental sync: Saved ${saved} new ${syncCategory} jobs!`);
       } else {
-        toast.success(`Synced! Scraped ${scraped}, saved ${saved} jobs with apply links.`);
+        toast.success(`Synced! Scraped ${scraped}, saved ${saved} ${syncCategory} jobs.`);
       }
       queryClient.invalidateQueries(['admin-jobs']);
       queryClient.invalidateQueries(['admin-job-companies']);
+      queryClient.invalidateQueries(['jobs']);
     } catch (e) {
       toast.error(e?.response?.data?.message || 'Sync failed');
     } finally {
@@ -740,25 +972,48 @@ function ManageJobsTab() {
     <div className="space-y-4">
       {/* Active Sync Status Banner with Stop option */}
       {syncing && (
-        <div className="p-3.5 rounded-xl bg-accent-blue/10 border border-accent-blue/30 flex items-center justify-between gap-3 shadow-sm">
+        <div className="p-3.5 rounded-xl bg-accent-blue/10 border border-accent-blue/30 flex items-center justify-between gap-3 shadow-sm flex-wrap">
           <div className="flex items-center gap-2.5 text-xs font-semibold text-text-primary">
             <Loader2 className="w-4 h-4 animate-spin text-accent-blue flex-shrink-0" />
             <div>
-              <p className="font-bold">HireDoor Scraper is currently syncing jobs...</p>
-              <p className="text-[11px] text-text-muted font-normal mt-0.5">Browsing verified jobs, extracting direct company application links.</p>
+              <p className="font-bold">HireDoor Scraper is syncing {syncCategory} jobs...</p>
+              <p className="text-[11px] text-text-muted font-normal mt-0.5">
+                {syncState?.currentStep || 'Extracting verified job cards and company direct links.'}
+              </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleStopSync}
-            disabled={stoppingSync}
-            className="btn btn-sm px-3.5 py-1.5 bg-red-500/90 hover:bg-red-600 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all flex-shrink-0"
-          >
-            <X className="w-3.5 h-3.5" />
-            {stoppingSync ? 'Stopping...' : 'Stop Sync'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTerminalOpen(true)}
+              className="btn btn-sm px-3 py-1.5 bg-bg-card border border-border text-text-primary font-mono text-xs rounded-lg flex items-center gap-1.5 hover:border-accent-blue/50"
+            >
+              <Terminal className="w-3.5 h-3.5 text-accent-green" />
+              View Terminal
+            </button>
+            <button
+              type="button"
+              onClick={handleStopSync}
+              disabled={stoppingSync}
+              className="btn btn-sm px-3.5 py-1.5 bg-red-500/90 hover:bg-red-600 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-sm transition-all flex-shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+              {stoppingSync ? 'Stopping...' : 'Stop Sync'}
+            </button>
+          </div>
         </div>
       )}
+
+      {/* Live Terminal Modal */}
+      <LiveSyncTerminal
+        isOpen={terminalOpen}
+        onClose={() => setTerminalOpen(false)}
+        syncState={syncState}
+        syncLogs={syncLogs}
+        syncing={syncing}
+        onStopSync={handleStopSync}
+        stoppingSync={stoppingSync}
+      />
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
@@ -768,7 +1023,42 @@ function ManageJobsTab() {
           onChange={e => { setSearch(e.target.value); setPage(1); }}
           placeholder="Search jobs..."
         />
+
+        {/* Category Classification Filter Tabs */}
+        <div className="flex items-center gap-1 bg-bg-secondary p-1 rounded-lg border border-border">
+          {[
+            { id: 'all', label: 'All Categories' },
+            { id: 'Tech', label: '💻 Tech' },
+            { id: 'Non-Tech', label: '💼 Non-Tech' },
+          ].map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => { setCategoryFilter(cat.id); setPage(1); }}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                categoryFilter === cat.id
+                  ? 'bg-accent-blue text-white shadow-sm'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+
         <div className="ml-auto flex items-center gap-2">
+          {/* Live Terminal toggle button */}
+          <button
+            type="button"
+            onClick={() => setTerminalOpen(true)}
+            className="btn btn-ghost btn-sm flex items-center gap-1.5 font-mono text-xs border border-border"
+            title="Open live scraping terminal"
+          >
+            <Terminal className="w-3.5 h-3.5 text-accent-green" />
+            Live Terminal
+            {syncing && <span className="w-2 h-2 rounded-full bg-accent-green animate-pulse" />}
+          </button>
+
           {syncing ? (
             <div className="flex items-center gap-2">
               <span className="flex items-center gap-1.5 text-accent-blue font-semibold text-xs py-1.5 px-3 rounded-lg bg-accent-blue/10 border border-accent-blue/20">
@@ -787,7 +1077,7 @@ function ManageJobsTab() {
           ) : (
             <button
               onClick={() => setSyncModalOpen(true)}
-              className="btn btn-ghost btn-sm flex items-center gap-1.5"
+              className="btn btn-primary btn-sm flex items-center gap-1.5"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Sync HireDoor
@@ -816,8 +1106,45 @@ function ManageJobsTab() {
             </div>
             
             <p className="text-xs text-text-muted leading-relaxed">
-              The scraper logs into HireDoor, browses verified jobs, opens detailed cards, and clicks <strong>Apply Now</strong> to extract real company application links.
+              The scraper logs into HireDoor, toggles to your chosen category, browses verified jobs, and extracts direct company application links.
             </p>
+
+            {/* Portal Mode Selection: Tech vs Non-Tech */}
+            <div className="space-y-1.5 p-3 rounded-lg bg-bg-secondary border border-border">
+              <label className="text-xs font-bold text-text-primary flex items-center justify-between">
+                <span>1. Select Job Category:</span>
+                <span className="text-[10px] text-accent-blue font-mono">Toggles HireDoor Vertical</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setSyncCategory('Tech')}
+                  className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-center transition-all ${
+                    syncCategory === 'Tech'
+                      ? 'bg-accent-blue/15 border-accent-blue text-accent-blue shadow-sm ring-2 ring-accent-blue/30'
+                      : 'bg-bg-card border-border text-text-muted hover:border-border-hover'
+                  }`}
+                >
+                  <span className="text-base">💻</span>
+                  <span className="text-xs font-bold text-text-primary mt-1">Tech Jobs</span>
+                  <span className="text-[10px] text-text-muted">hiredoor.in/jobs</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSyncCategory('Non-Tech')}
+                  className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-center transition-all ${
+                    syncCategory === 'Non-Tech'
+                      ? 'bg-purple-600/15 border-purple-500 text-purple-400 shadow-sm ring-2 ring-purple-500/30'
+                      : 'bg-bg-card border-border text-text-muted hover:border-border-hover'
+                  }`}
+                >
+                  <span className="text-base">💼</span>
+                  <span className="text-xs font-bold text-text-primary mt-1">Non-Tech Jobs</span>
+                  <span className="text-[10px] text-text-muted">hiredoor.in/non-tech</span>
+                </button>
+              </div>
+            </div>
 
             <div className="space-y-2.5">
               <label className="text-xs font-medium text-text-primary">
@@ -1123,6 +1450,13 @@ function ManageJobsTab() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-text-primary truncate">{job.title}</span>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                    job.category === 'Non-Tech'
+                      ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                      : 'bg-accent-blue/10 text-accent-blue border-accent-blue/30'
+                  }`}>
+                    {job.category === 'Non-Tech' ? '💼 Non-Tech' : '💻 Tech'}
+                  </span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${SOURCE_BADGE[job.source] || SOURCE_BADGE.manual}`}>
                     {job.source}
                   </span>
@@ -1130,10 +1464,21 @@ function ManageJobsTab() {
                     <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-accent-red/10 text-accent-red">inactive</span>
                   )}
                 </div>
-                <p className="text-xs text-text-faint mt-0.5">
-                  {job.companyName || job.companyTag || '—'} · {job.jobType} · {job.workMode}
-                  {job.salary && ` · ${job.salary}`}
-                </p>
+                <div className="flex items-center gap-2 flex-wrap text-xs text-text-faint mt-0.5">
+                  <span>{job.companyName || job.companyTag || '—'} · {job.jobType} · {job.workMode}</span>
+                  {job.salary && <span>· {job.salary}</span>}
+                  {(job.scrapedAt || (job.source === 'scraped' && job.createdAt)) && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-accent-blue bg-accent-blue/5 border border-accent-blue/20 px-1.5 py-0.5 rounded font-medium">
+                      <Clock className="w-3 h-3 text-accent-blue" />
+                      Scraped: {new Date(job.scrapedAt || job.createdAt).toLocaleString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  )}
+                </div>
                 {job.applyEmail && (
                   <p className="text-xs text-accent-blue mt-0.5 flex items-center gap-1">
                     <Mail className="w-3 h-3" /> {job.applyEmail}

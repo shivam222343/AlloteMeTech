@@ -91,7 +91,14 @@ export default function JobCard({
       </div>
 
       {/* Tags row */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5 items-center">
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+          job.category === 'Non-Tech'
+            ? 'text-purple-400 bg-purple-500/10 border-purple-500/20'
+            : 'text-accent-blue bg-accent-blue/10 border-accent-blue/20'
+        }`}>
+          {job.category === 'Non-Tech' ? '💼 Non-Tech' : '💻 Tech'}
+        </span>
         <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${TYPE_COLORS[job.jobType] || 'text-text-muted bg-bg-secondary'}`}>
           {job.jobType}
         </span>

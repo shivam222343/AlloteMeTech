@@ -15,6 +15,8 @@ const {
   bulkCreateJobs,
   syncHireDoor,
   stopSync,
+  getSyncStatus,
+  streamSyncLogs,
   adminGetSettings,
   adminUpdateSettings,
   adminBulkDelete,
@@ -35,6 +37,8 @@ router.post('/admin/bulk-create', protect, adminOnly, bulkCreateJobs);
 router.post('/admin/bulk-delete', protect, adminOnly, adminBulkDelete);
 router.post('/admin/sync-hiredoor', protect, adminOnly, syncHireDoor);
 router.post('/admin/stop-sync', protect, adminOnly, stopSync);
+router.get('/admin/sync-status', protect, adminOnly, getSyncStatus);
+router.get('/admin/sync-logs/stream', protect, adminOnly, streamSyncLogs);
 
 // Job Application limit and tracking routes (optionalAuth: supports both guests and logged-in users)
 router.get('/apply/status', optionalAuth, getApplyStatus);

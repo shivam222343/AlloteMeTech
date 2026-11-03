@@ -21,6 +21,7 @@ export default function Jobs() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
+  const [category, setCategory] = useState('Tech');
   const [search, setSearch] = useState('');
   const [jobType, setJobType] = useState('');
   const [workMode, setWorkMode] = useState('');
@@ -29,8 +30,8 @@ export default function Jobs() {
   const [copied, setCopied] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['jobs', search, jobType, workMode, page],
-    queryFn: () => jobsApi.getAll({ search, jobType, workMode, page, limit: 12 }).then(r => r.data),
+    queryKey: ['jobs', category, search, jobType, workMode, page],
+    queryFn: () => jobsApi.getAll({ category, search, jobType, workMode, page, limit: 12 }).then(r => r.data),
     keepPreviousData: true,
   });
 
@@ -104,6 +105,52 @@ export default function Jobs() {
 
       {/* Jobs Premium Banner for Free / Non-Premium Users */}
       <JobsPremiumBanner />
+
+      {/* Category Toggle: Tech vs Non-Tech */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex p-1 rounded-xl bg-bg-card border border-border shadow-sm">
+          <button
+            type="button"
+            onClick={() => { setCategory('Tech'); setPage(1); }}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
+              category === 'Tech'
+                ? 'bg-accent-blue text-white shadow-md'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+          >
+            <span>💻 Tech Jobs</span>
+            {pagination.techCount !== undefined && (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                category === 'Tech' ? 'bg-white/20 text-white' : 'bg-bg-secondary text-text-faint'
+              }`}>
+                {pagination.techCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setCategory('Non-Tech'); setPage(1); }}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
+              category === 'Non-Tech'
+                ? 'bg-purple-600 text-white shadow-md'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+          >
+            <span>💼 Non-Tech Jobs</span>
+            {pagination.nonTechCount !== undefined && (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                category === 'Non-Tech' ? 'bg-white/20 text-white' : 'bg-bg-secondary text-text-faint'
+              }`}>
+                {pagination.nonTechCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div className="text-xs text-text-muted">
+          Showing <span className="font-semibold text-text-primary">{category === 'Non-Tech' ? 'Non-Tech' : 'Tech'}</span> roles
+        </div>
+      </div>
 
       {/* Admin Multi-Select Toolbar (Admin Only) */}
       {isAdmin && (

@@ -124,6 +124,7 @@ export const jobsApi = {
     return api.post('/jobs/admin/sync-hiredoor', payload);
   },
   stopSync: () => api.post('/jobs/admin/stop-sync'),
+  getSyncStatus: () => api.get('/jobs/admin/sync-status'),
   getCompanies: (params) => api.get('/jobs/admin/companies', { params }),
   updateCompany: (tag, data) => api.put(`/jobs/admin/companies/${tag}`, data),
   getSettings: () => api.get('/jobs/admin/settings'),

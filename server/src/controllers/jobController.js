@@ -11,7 +11,7 @@ function generateSlug(title) {
 
 // ── Public: Get All Jobs ──────────────────────────────────────────────────────
 exports.getJobs = async (req, res) => {
-  const { page = 1, limit = 20, search, jobType, workMode, company, tag } = req.query;
+  const { page = 1, limit = 20, search, jobType, workMode, company, tag, category } = req.query;
   const query = { isActive: true };
   
   if (search) query.$or = [
@@ -24,20 +24,40 @@ exports.getJobs = async (req, res) => {
   if (company) query.companyTag = company;
   if (tag) query.tags = { $in: [tag] };
 
+  // Category filter: Tech vs Non-Tech (backwards compatible with existing jobs that have no category set)
+  if (category === 'Non-Tech') {
+    query.category = 'Non-Tech';
+  } else if (category === 'Tech') {
+    query.$and = query.$and || [];
+    query.$and.push({
+      $or: [
+        { category: 'Tech' },
+        { category: { $exists: false } },
+        { category: null },
+      ]
+    });
+  }
+
   const skip = (Number(page) - 1) * Number(limit);
-  const [jobs, total] = await Promise.all([
+  const [jobs, total, techCount, nonTechCount] = await Promise.all([
     Job.find(query)
       .populate('company', 'name slug logo hasWhiteBg')
       .sort({ isFeatured: -1, postedAt: -1 })
       .skip(skip)
       .limit(Number(limit))
       .lean(),
-    Job.countDocuments(query)
+    Job.countDocuments(query),
+    Job.countDocuments({ isActive: true, $or: [{ category: 'Tech' }, { category: { $exists: false } }, { category: null }] }),
+    Job.countDocuments({ isActive: true, category: 'Non-Tech' }),
   ]);
 
   return ApiResponse.paginated(res, jobs, {
-    page: Number(page), limit: Number(limit), total,
-    pages: Math.ceil(total / Number(limit))
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    pages: Math.ceil(total / Number(limit)),
+    techCount,
+    nonTechCount,
   });
 };
 
@@ -135,17 +155,41 @@ exports.serveJobOgHtml = async (req, res) => {
 
 // ── Admin: Get All Jobs (including inactive) ──────────────────────────────────
 exports.adminGetJobs = async (req, res) => {
-  const { page = 1, limit = 20, search, source } = req.query;
+  const { page = 1, limit = 20, search, source, category } = req.query;
   const query = {};
   if (search) query.$or = [{ title: new RegExp(search, 'i') }, { companyName: new RegExp(search, 'i') }];
   if (source) query.source = source;
 
+  if (category && category !== 'all') {
+    if (category === 'Non-Tech') {
+      query.category = 'Non-Tech';
+    } else if (category === 'Tech') {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { category: 'Tech' },
+          { category: { $exists: false } },
+          { category: null },
+        ]
+      });
+    }
+  }
+
   const skip = (Number(page) - 1) * Number(limit);
-  const [jobs, total] = await Promise.all([
+  const [jobs, total, techCount, nonTechCount] = await Promise.all([
     Job.find(query).populate('company', 'name slug logo').sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
-    Job.countDocuments(query)
+    Job.countDocuments(query),
+    Job.countDocuments({ $or: [{ category: 'Tech' }, { category: { $exists: false } }, { category: null }] }),
+    Job.countDocuments({ category: 'Non-Tech' }),
   ]);
-  return ApiResponse.paginated(res, jobs, { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / Number(limit)) });
+  return ApiResponse.paginated(res, jobs, {
+    page: Number(page),
+    limit: Number(limit),
+    total,
+    pages: Math.ceil(total / Number(limit)),
+    techCount,
+    nonTechCount,
+  });
 };
 
 // ── Helper: resolve company from tag ─────────────────────────────────────────
@@ -308,6 +352,7 @@ exports.createJob = async (req, res) => {
   const job = await Job.create({
     ...rest,
     slug,
+    category: rest.category === 'Non-Tech' ? 'Non-Tech' : 'Tech',
     companyTag: companyTag || '',
     company: companyId,
     companyName: companyName || rest.companyName || '',
@@ -656,6 +701,7 @@ exports.bulkCreateJobs = async (req, res) => {
         company: companyId,
         companyName: companyName || rest.companyName || '',
         companyLogo: companyLogo || rest.companyLogo || '',
+        category: rest.category === 'Non-Tech' ? 'Non-Tech' : 'Tech',
         postedAt,
         source: 'ai',
         isActive: true,
@@ -750,13 +796,103 @@ async function getPuppeteerExecutablePath(puppeteer) {
   return undefined;
 }
 
-// ── Global Scraper Cancel Flag ────────────────────────────────────────────────
+// ── Global Scraper State & Real-Time Sync Terminal Logs ───────────────────────
 let isSyncCancelled = false;
+let activeSyncLogs = [];
+let activeSyncState = {
+  isActive: false,
+  status: 'idle', // 'idle' | 'running' | 'completed' | 'stopped' | 'failed'
+  mode: 'count',
+  category: 'Tech',
+  startedAt: null,
+  endedAt: null,
+  totalToScrape: 0,
+  processedCount: 0,
+  savedCount: 0,
+  duplicateCount: 0,
+  errorsCount: 0,
+  currentStep: '',
+  message: '',
+};
+
+const syncLogListeners = new Set();
+
+function logScraper(message, type = 'info', extraState = {}) {
+  const timestamp = new Date();
+  const timeStr = timestamp.toLocaleTimeString('en-US', { hour12: false });
+  console.log(`[HireDoor Scraper][${timeStr}] ${message}`);
+
+  const entry = {
+    id: `${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    time: timeStr,
+    timestamp: timestamp.toISOString(),
+    message,
+    type, // 'info' | 'success' | 'warn' | 'error' | 'step'
+  };
+
+  activeSyncLogs.push(entry);
+  if (activeSyncLogs.length > 600) activeSyncLogs.shift();
+
+  Object.assign(activeSyncState, extraState);
+
+  // Broadcast to any active SSE listeners
+  if (syncLogListeners.size > 0) {
+    const payload = `data: ${JSON.stringify({ type: 'log', log: entry, state: activeSyncState })}\n\n`;
+    for (const clientRes of syncLogListeners) {
+      try {
+        clientRes.write(payload);
+      } catch (err) {
+        syncLogListeners.delete(clientRes);
+      }
+    }
+  }
+
+  return entry;
+}
+
+// ── Admin: Get Sync Status & Recent Terminal Logs (Polling API) ───────────────
+exports.getSyncStatus = async (req, res) => {
+  return ApiResponse.success(res, {
+    state: activeSyncState,
+    logs: activeSyncLogs,
+  });
+};
+
+// ── Admin: Stream Sync Logs (Server-Sent Events) ──────────────────────────────
+exports.streamSyncLogs = (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  // Send initial payload with all existing logs and state
+  res.write(`data: ${JSON.stringify({ type: 'init', state: activeSyncState, logs: activeSyncLogs })}\n\n`);
+  syncLogListeners.add(res);
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(': keep-alive\n\n');
+    } catch {
+      clearInterval(heartbeat);
+      syncLogListeners.delete(res);
+    }
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    syncLogListeners.delete(res);
+  });
+};
 
 // ── Admin: Stop In-Progress HireDoor Sync ────────────────────────────────────
 exports.stopSync = async (req, res) => {
   isSyncCancelled = true;
-  console.log('[HireDoor Scraper] Admin requested to stop active sync.');
+  logScraper('Admin requested to stop active sync.', 'warn', {
+    status: 'stopping',
+    message: 'Cancellation requested by admin',
+  });
   return ApiResponse.success(res, { stopped: true }, 'Sync cancellation requested');
 };
 
@@ -806,6 +942,50 @@ async function extractJobLinksFromPage(page) {
 exports.syncHireDoor = async (req, res) => {
   let browser;
   isSyncCancelled = false;
+
+  const category = req.body?.category === 'Non-Tech' ? 'Non-Tech' : 'Tech';
+  const mode = req.body?.mode || 'count'; // 'until_last_added', 'count', or 'pages'
+  const limitParam = parseInt(req.body?.limit || req.query?.limit || 10, 10);
+  const rawPages = req.body?.pages;
+  let targetPages = [];
+
+  if (mode === 'pages') {
+    if (Array.isArray(rawPages)) {
+      targetPages = rawPages.map(p => parseInt(p, 10)).filter(p => !isNaN(p) && p > 0);
+    } else if (typeof rawPages === 'string') {
+      targetPages = rawPages.split(/[,;\s]+/).map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p) && p > 0);
+    }
+    targetPages = Array.from(new Set(targetPages)).sort((a, b) => a - b);
+    if (targetPages.length === 0) targetPages = [1];
+  }
+
+  const maxJobs = mode === 'until_last_added'
+    ? 200
+    : (mode === 'pages' ? targetPages.length * 25 : Math.min(Math.max(limitParam, 1), 200));
+
+  // Reset active sync state for live terminal streaming
+  activeSyncLogs = [];
+  activeSyncState = {
+    isActive: true,
+    status: 'running',
+    mode,
+    category,
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    totalToScrape: maxJobs,
+    processedCount: 0,
+    savedCount: 0,
+    duplicateCount: 0,
+    errorsCount: 0,
+    currentStep: `Starting scraper session for ${category} jobs...`,
+    message: `Initialized HireDoor ${category} sync (mode: ${mode})`,
+  };
+
+  logScraper(`=== STARTING HIREDOOR SCRAPER [Portal: ${category} | Mode: ${mode}] ===`, 'step', {
+    isActive: true,
+    status: 'running',
+  });
+
   try {
     const puppeteer = require('puppeteer');
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -814,25 +994,6 @@ exports.syncHireDoor = async (req, res) => {
     const creds = await getEffectiveHireDoorCredentials();
     const HIREDOOR_EMAIL = creds.email;
     const HIREDOOR_PASSWORD = creds.password;
-
-    const mode = req.body?.mode || 'count'; // 'until_last_added', 'count', or 'pages'
-    const limitParam = parseInt(req.body?.limit || req.query?.limit || 10, 10);
-    const rawPages = req.body?.pages;
-    let targetPages = [];
-
-    if (mode === 'pages') {
-      if (Array.isArray(rawPages)) {
-        targetPages = rawPages.map(p => parseInt(p, 10)).filter(p => !isNaN(p) && p > 0);
-      } else if (typeof rawPages === 'string') {
-        targetPages = rawPages.split(/[,;\s]+/).map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p) && p > 0);
-      }
-      targetPages = Array.from(new Set(targetPages)).sort((a, b) => a - b);
-      if (targetPages.length === 0) targetPages = [1];
-    }
-
-    const maxJobs = mode === 'until_last_added'
-      ? 200
-      : (mode === 'pages' ? targetPages.length * 25 : Math.min(Math.max(limitParam, 1), 200));
 
     let chromiumArgs = [];
     try {
@@ -862,10 +1023,11 @@ exports.syncHireDoor = async (req, res) => {
       args: launchArgs,
     };
     if (executablePath) {
-      console.log('[HireDoor Scraper] Using browser executable at:', executablePath);
+      logScraper(`Using browser executable: ${executablePath}`, 'info');
       launchOptions.executablePath = executablePath;
     }
 
+    logScraper('Launching headless Chromium browser...', 'info', { currentStep: 'Launching Chromium browser' });
     browser = await puppeteer.launch(launchOptions);
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
@@ -873,7 +1035,7 @@ exports.syncHireDoor = async (req, res) => {
     // 1. Log in to HireDoor if credentials available
     if (HIREDOOR_EMAIL && HIREDOOR_PASSWORD) {
       try {
-        console.log(`[HireDoor Scraper] Logging in at https://hiredoor.in/login (source: ${creds.source}) ...`);
+        logScraper(`Attempting login at https://hiredoor.in/login (credentials source: ${creds.source})...`, 'info', { currentStep: 'Logging in to HireDoor' });
         await page.goto('https://hiredoor.in/login', { waitUntil: 'networkidle2', timeout: 30000 });
         await page.waitForSelector('input[type="email"]', { timeout: 8000 });
         await page.type('input[type="email"]', HIREDOOR_EMAIL);
@@ -887,39 +1049,71 @@ exports.syncHireDoor = async (req, res) => {
           if (btn) btn.click();
         });
 
-        await sleep(4000);
+        await sleep(3500);
+        logScraper('HireDoor login submitted successfully.', 'success');
       } catch (loginErr) {
-        console.warn('[HireDoor] Login attempt skipped or failed:', loginErr.message);
+        logScraper(`HireDoor login note: ${loginErr.message}. Proceeding with public access.`, 'warn');
       }
+    } else {
+      logScraper('No HireDoor credentials configured. Proceeding with public listings.', 'info');
     }
 
+    // Determine target portal base URL and toggle vertical state on HireDoor
+    const baseListingUrl = category === 'Non-Tech' ? 'https://hiredoor.in/non-tech' : 'https://hiredoor.in/jobs';
+    const getPageUrl = (p) => p === 1 ? baseListingUrl : `${baseListingUrl}?page=${p}`;
+
+    logScraper(`Selected Portal Mode: ${category} -> Base URL: ${baseListingUrl}`, 'step', {
+      currentStep: `Preparing ${category} listings`,
+    });
+
     // 2. Multi-page collection of job cards
-    console.log(`[HireDoor Scraper] Starting collection (mode: ${mode}, limit: ${maxJobs})...`);
     let pageNum = 1;
     let jobUrls = [];
     const seenUrls = new Set();
     let stoppedAtDuplicate = false;
+    let duplicateCount = 0;
 
     if (mode === 'pages') {
-      console.log(`[HireDoor Scraper] Crawling specific selected pages: ${targetPages.join(', ')} ...`);
+      logScraper(`Mode 'Pages': Crawling specific selected pages [${targetPages.join(', ')}]...`, 'info', {
+        currentStep: `Crawling pages ${targetPages.join(', ')}`,
+      });
       for (const pNum of targetPages) {
         if (isSyncCancelled) {
-          console.log('[HireDoor Scraper] Sync cancelled by admin. Exiting page loop.');
+          logScraper('Sync cancelled by admin. Exiting page loop.', 'warn');
           break;
         }
 
-        const pageUrl = pNum === 1 ? 'https://hiredoor.in/jobs' : `https://hiredoor.in/jobs?page=${pNum}`;
-        console.log(`[HireDoor Scraper] Crawling selected page ${pNum}: ${pageUrl} ...`);
+        const pageUrl = getPageUrl(pNum);
+        logScraper(`Navigating to ${category} Page ${pNum}: ${pageUrl}`, 'info', {
+          currentStep: `Scanning page ${pNum}`,
+        });
+
         try {
           await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 35000 });
           await sleep(2500);
+
+          // Ensure vertical toggle matches selected category on HireDoor
+          await page.evaluate((targetCategory) => {
+            try {
+              const isNonTech = targetCategory === 'Non-Tech';
+              const targetLabel = isNonTech ? 'Non-tech' : 'Tech';
+              localStorage.setItem('hd-vertical', isNonTech ? 'non-tech' : 'tech');
+              document.cookie = `hd-vertical=${isNonTech ? 'non-tech' : 'tech'}; path=/; domain=hiredoor.in`;
+
+              const btn = document.querySelector(`button[aria-label="${targetLabel}" i]`) ||
+                Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim().toLowerCase() === targetLabel.toLowerCase());
+              if (btn) btn.click();
+            } catch (e) {}
+          }, category);
+          await sleep(1000);
         } catch (pageNavErr) {
-          console.warn(`[HireDoor Scraper] Failed to load ${pageUrl}:`, pageNavErr.message);
+          logScraper(`Failed to load ${pageUrl}: ${pageNavErr.message}`, 'error');
           continue;
         }
 
         if (isSyncCancelled) break;
         const pageUrls = await extractJobLinksFromPage(page);
+        logScraper(`Found ${pageUrls.length} job cards on Page ${pNum}. Filtering duplicates...`, 'info');
 
         for (const cardUrl of pageUrls) {
           if (isSyncCancelled) break;
@@ -928,7 +1122,8 @@ exports.syncHireDoor = async (req, res) => {
 
           const alreadyInDb = await Job.findOne({ sourceUrl: cardUrl }).select('_id title').lean();
           if (alreadyInDb) {
-            console.log(`[HireDoor Scraper] Skipping duplicate job already in DB: ${cardUrl}`);
+            duplicateCount++;
+            logScraper(`Job already exists in DB: ${alreadyInDb.title} (Skipping)`, 'info', { duplicateCount });
             continue;
           }
 
@@ -940,18 +1135,35 @@ exports.syncHireDoor = async (req, res) => {
 
       while (jobUrls.length < maxJobs && pageNum <= maxPagesToInspect && !stoppedAtDuplicate) {
         if (isSyncCancelled) {
-          console.log('[HireDoor Scraper] Sync cancelled by admin. Exiting page loop.');
+          logScraper('Sync cancelled by admin. Exiting page loop.', 'warn');
           break;
         }
 
-        const pageUrl = pageNum === 1 ? 'https://hiredoor.in/jobs' : `https://hiredoor.in/jobs?page=${pageNum}`;
-        console.log(`[HireDoor Scraper] Crawling listing page ${pageNum}: ${pageUrl} (collected: ${jobUrls.length}/${maxJobs})`);
+        const pageUrl = getPageUrl(pageNum);
+        logScraper(`Crawling ${category} Listing Page ${pageNum}: ${pageUrl} (Found: ${jobUrls.length}/${maxJobs})`, 'info', {
+          currentStep: `Scanning page ${pageNum} (${jobUrls.length}/${maxJobs} jobs queued)`,
+        });
         
         try {
           await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 35000 });
           await sleep(2500);
+
+          // Ensure vertical toggle matches selected category on HireDoor
+          await page.evaluate((targetCategory) => {
+            try {
+              const isNonTech = targetCategory === 'Non-Tech';
+              const targetLabel = isNonTech ? 'Non-tech' : 'Tech';
+              localStorage.setItem('hd-vertical', isNonTech ? 'non-tech' : 'tech');
+              document.cookie = `hd-vertical=${isNonTech ? 'non-tech' : 'tech'}; path=/; domain=hiredoor.in`;
+
+              const btn = document.querySelector(`button[aria-label="${targetLabel}" i]`) ||
+                Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim().toLowerCase() === targetLabel.toLowerCase());
+              if (btn) btn.click();
+            } catch (e) {}
+          }, category);
+          await sleep(1000);
         } catch (pageNavErr) {
-          console.warn(`[HireDoor Scraper] Failed to load ${pageUrl}:`, pageNavErr.message);
+          logScraper(`Failed to load ${pageUrl}: ${pageNavErr.message}`, 'error');
           break;
         }
 
@@ -960,7 +1172,7 @@ exports.syncHireDoor = async (req, res) => {
         const pageUrls = await extractJobLinksFromPage(page);
 
         if (!pageUrls || pageUrls.length === 0) {
-          console.log(`[HireDoor Scraper] No job cards found on page ${pageNum}. Reached end of listings.`);
+          logScraper(`No job cards found on page ${pageNum}. Reached end of listings.`, 'warn');
           break;
         }
 
@@ -972,12 +1184,15 @@ exports.syncHireDoor = async (req, res) => {
 
           const alreadyInDb = await Job.findOne({ sourceUrl: cardUrl }).select('_id title').lean();
           if (alreadyInDb) {
+            duplicateCount++;
             if (mode === 'until_last_added') {
-              console.log(`[HireDoor Scraper] Found last added job in DB: "${alreadyInDb.title}". Stopping incremental sync.`);
+              logScraper(`Reached previously added job in DB: "${alreadyInDb.title}". Stopping incremental crawl.`, 'step', {
+                duplicateCount,
+              });
               stoppedAtDuplicate = true;
               break;
             } else {
-              console.log(`[HireDoor Scraper] Skipping duplicate job already in DB: ${cardUrl}`);
+              logScraper(`Skipping duplicate already in DB: ${alreadyInDb.title}`, 'info', { duplicateCount });
               continue;
             }
           }
@@ -990,7 +1205,10 @@ exports.syncHireDoor = async (req, res) => {
       }
     }
 
-    console.log(`[HireDoor Scraper] Found ${jobUrls.length} new job cards to scrape.`);
+    logScraper(`Queued ${jobUrls.length} new unique ${category} jobs to extract.`, 'step', {
+      totalToScrape: jobUrls.length,
+      currentStep: `Extracting ${jobUrls.length} job cards...`,
+    });
 
     let savedCount = 0;
     let processedCount = 0;
@@ -999,12 +1217,16 @@ exports.syncHireDoor = async (req, res) => {
     // 3. For each unique new job card: open detail page, scrape info, click Apply Now to get application link
     for (const jobUrl of jobUrls) {
       if (isSyncCancelled) {
-        console.log('[HireDoor Scraper] Sync cancelled by admin. Exiting job scraping loop.');
+        logScraper('Sync cancelled by admin. Exiting job scraping loop.', 'warn');
         break;
       }
       try {
         processedCount++;
-        console.log(`[HireDoor Scraper] Opening job ${processedCount}/${jobUrls.length}: ${jobUrl}`);
+        logScraper(`[${processedCount}/${jobUrls.length}] Opening: ${jobUrl}`, 'info', {
+          processedCount,
+          currentStep: `Scraping job ${processedCount}/${jobUrls.length}`,
+        });
+
         await page.goto(jobUrl, { waitUntil: 'networkidle2', timeout: 30000 });
         await sleep(2000);
 
@@ -1161,18 +1383,17 @@ exports.syncHireDoor = async (req, res) => {
         if (!finalApplyLink && validApplyEmail) {
           finalApplyLink = `mailto:${validApplyEmail}`;
         }
-        // NEVER set finalApplyLink = jobUrl (which is hiredoor.in)! Leave empty if no company link/email found.
 
         // Skip adding jobs that don't have company apply links or company emails
         if (!finalApplyLink && !validApplyEmail) {
-          console.log(`[HireDoor Scraper] Skipping "${jobData.title}" (${jobUrl}) - no company apply link or email found.`);
+          logScraper(`Skipping "${jobData.title}" (${jobData.companyName || 'Unknown'}) - no direct company apply link or email found.`, 'warn');
           continue;
         }
 
         // Skip category listing pages that have no actual job responsibilities or requirements
         const isCategoryTitle = /internships|freshers|remote|bangalore|hyderabad|pune|mumbai|delhi|jobs in /i.test(jobData.title) && (!jobData.responsibilities?.length && !jobData.requirements?.length);
         if (isCategoryTitle) {
-          console.log(`[HireDoor Scraper] Skipping category page: "${jobData.title}"`);
+          logScraper(`Skipping category index link: "${jobData.title}"`, 'warn');
           continue;
         }
 
@@ -1195,7 +1416,8 @@ exports.syncHireDoor = async (req, res) => {
         });
 
         if (existing) {
-          console.log(`[HireDoor Scraper] Skipping duplicate job: "${jobData.title}" (${companyTag})`);
+          duplicateCount++;
+          logScraper(`Duplicate job detected in DB: "${jobData.title}".`, 'info', { duplicateCount });
           if (mode === 'until_last_added') {
             stoppedAtDuplicate = true;
             break;
@@ -1210,6 +1432,8 @@ exports.syncHireDoor = async (req, res) => {
           companyTag,
           companyName: companyName || jobData.companyName,
           companyLogo: finalCompanyLogo,
+          category,
+          scrapedAt: new Date(),
           location: jobData.location,
           workMode: jobData.workMode,
           jobType: jobData.jobType,
@@ -1219,7 +1443,7 @@ exports.syncHireDoor = async (req, res) => {
           description: jobData.description,
           responsibilities: jobData.responsibilities,
           requirements: jobData.requirements,
-          tags: jobData.tags.length ? jobData.tags : ['Software'],
+          tags: jobData.tags.length ? jobData.tags : [category === 'Non-Tech' ? 'Non-Tech' : 'Software'],
           applyLink: finalApplyLink,
           applyEmail: validApplyEmail,
           contactPhone: jobData.contactPhone || '',
@@ -1244,23 +1468,36 @@ exports.syncHireDoor = async (req, res) => {
           })(),
         });
         savedCount++;
+        logScraper(`[Saved #${savedCount}] "${jobData.title}" at ${jobData.companyName || 'Company'} [${category}]`, 'success', {
+          savedCount,
+        });
       } catch (jobErr) {
-        console.error(`[HireDoor Scraper] Error scraping ${jobUrl}:`, jobErr.message);
+        logScraper(`Error scraping ${jobUrl}: ${jobErr.message}`, 'error');
         errors.push(`${jobUrl}: ${jobErr.message}`);
+        activeSyncState.errorsCount = errors.length;
       }
     }
 
     const msg = isSyncCancelled
-      ? `Sync stopped by admin. Saved ${savedCount} new jobs.`
+      ? `Sync stopped by admin. Saved ${savedCount} new ${category} jobs.`
       : (mode === 'pages'
-        ? `Successfully synced ${savedCount} new jobs across page(s) ${targetPages.join(', ')}`
+        ? `Successfully synced ${savedCount} new ${category} jobs across page(s) ${targetPages.join(', ')}`
         : (stoppedAtDuplicate
-          ? `Incremental sync complete: saved ${savedCount} new jobs (stopped upon reaching previously added job)`
-          : `Successfully synced ${savedCount} new jobs from HireDoor across ${pageNum - 1 || 1} page(s)`));
+          ? `Incremental sync complete: saved ${savedCount} new ${category} jobs (stopped upon reaching previously added job)`
+          : `Successfully synced ${savedCount} new ${category} jobs from HireDoor across ${pageNum - 1 || 1} page(s)`));
+
+    logScraper(`=== SYNC FINISHED: ${msg} ===`, 'step', {
+      isActive: false,
+      status: isSyncCancelled ? 'stopped' : 'completed',
+      endedAt: new Date().toISOString(),
+      currentStep: 'Done',
+      message: msg,
+    });
 
     return ApiResponse.success(res, {
       scraped: processedCount,
       saved: savedCount,
+      category,
       stoppedAtDuplicate,
       wasCancelled: isSyncCancelled,
       mode,
@@ -1268,9 +1505,17 @@ exports.syncHireDoor = async (req, res) => {
     }, msg);
 
   } catch (error) {
+    logScraper(`Sync process failed: ${error.message}`, 'error', {
+      isActive: false,
+      status: 'failed',
+      endedAt: new Date().toISOString(),
+      currentStep: 'Failed',
+      message: error.message,
+    });
     console.error('[HireDoor Sync Error]', error);
     return ApiResponse.error(res, `Sync failed: ${error.message}`, 500);
   } finally {
+    activeSyncState.isActive = false;
     if (browser) {
       await browser.close().catch(() => {});
     }

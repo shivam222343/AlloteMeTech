@@ -25,12 +25,15 @@ const jobSchema = new mongoose.Schema({
   isFeatured: { type: Boolean, default: false },
   source: { type: String, enum: ['manual', 'ai', 'scraped'], default: 'manual' },
   sourceUrl: { type: String, default: '' }, // original URL for scraped jobs
+  category: { type: String, enum: ['Tech', 'Non-Tech'], default: 'Tech' },
+  scrapedAt: { type: Date, default: null },
   postedAt: { type: Date, default: Date.now },
   expiresAt: { type: Date, default: null },
 }, { timestamps: true });
 
 jobSchema.index({ title: 'text', companyName: 'text', description: 'text' });
 jobSchema.index({ isActive: 1, postedAt: -1 });
+jobSchema.index({ category: 1, isActive: 1, postedAt: -1 });
 jobSchema.index({ companyTag: 1 });
 
 module.exports = mongoose.model('Job', jobSchema);
