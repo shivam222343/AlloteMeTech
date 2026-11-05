@@ -211,6 +211,14 @@ export default function JobCard({
             >
               Email Apply <Mail className="w-3 h-3" />
             </button>
+          ) : (job.contactPhone || rawApplyLink.startsWith('tel:')) ? (
+            <button
+              type="button"
+              onClick={(e) => handleApply(e, job)}
+              className="btn btn-primary btn-sm flex items-center gap-1"
+            >
+              Contact <Phone className="w-3 h-3" />
+            </button>
           ) : null}
         </div>
       </div>

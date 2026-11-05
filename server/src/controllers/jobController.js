@@ -1066,16 +1066,25 @@ exports.syncHireDoor = async (req, res) => {
         await page.goto('https://hiredoor.in/login', { waitUntil: 'domcontentloaded', timeout: 15000 });
         await sleep(1500);
 
+        // HireDoor defaults to "Sign up" tab on /login — switch to "Sign in" tab
+        await page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          const signInTab = buttons.find(b => b.innerText.trim().toLowerCase() === 'sign in');
+          if (signInTab) signInTab.click();
+        });
+        await sleep(1000);
+
         await page.waitForSelector('input[type="email"]', { timeout: 8000 });
-        await page.type('input[type="email"]', HIREDOOR_EMAIL);
-        await page.type('input[type="password"]', HIREDOOR_PASSWORD);
+        const emailInputs = await page.$$('input[type="email"]');
+        if (emailInputs.length) await emailInputs[0].type(HIREDOOR_EMAIL);
+        const passInputs = await page.$$('input[type="password"]');
+        if (passInputs.length) await passInputs[0].type(HIREDOOR_PASSWORD);
 
         // Click the form submit / Sign in button
         await page.evaluate(() => {
-          const email = document.querySelector('input[type="email"]');
-          const form = email ? email.closest('form') : null;
-          const btn = form ? form.querySelector('button[type="submit"], button') : null;
-          if (btn) btn.click();
+          const submitBtn = document.querySelector('form button[type="submit"]') ||
+            Array.from(document.querySelectorAll('button')).find(b => /sign in|log in/i.test(b.innerText));
+          if (submitBtn) submitBtn.click();
         });
 
         await sleep(3500);
@@ -1280,7 +1289,16 @@ exports.syncHireDoor = async (req, res) => {
           try {
             const url = target.url();
             if (url && url !== 'about:blank' && !url.includes('hiredoor.in')) {
-              externalApplyUrl = url;
+              let resolvedUrl = url;
+              // Unwrap Google Accounts sign-in wrapper around Google Forms if present
+              if (url.includes('accounts.google.com') && url.includes('continue=')) {
+                try {
+                  const u = new URL(url);
+                  const cont = u.searchParams.get('continue');
+                  if (cont) resolvedUrl = decodeURIComponent(cont);
+                } catch (e) {}
+              }
+              externalApplyUrl = resolvedUrl;
               try {
                 const targetPage = await target.page();
                 if (targetPage) await targetPage.close().catch(() => {});
@@ -1375,9 +1393,26 @@ exports.syncHireDoor = async (req, res) => {
           });
           const applyEmail = validEmail ? validEmail.trim() : '';
 
-          // Look for contact phone / WhatsApp
-          const phoneMatch = bodyText.match(/(?:phone|call|contact|whatsapp|tel|mobile)[:\s]*([+]?[0-9\s-]{10,15})/i) || bodyText.match(/(\+91[\s-]?[6-9]\d{9})/);
-          const contactPhone = phoneMatch ? phoneMatch[1].trim() : '';
+          // Look for direct contact phone / WhatsApp / tel: links
+          const telLinks = Array.from(document.querySelectorAll('a[href^="tel:"]'))
+            .map(a => a.href.replace(/^tel:/i, '').trim())
+            .filter(Boolean);
+
+          const waLinks = Array.from(document.querySelectorAll('a[href*="wa.me"], a[href*="whatsapp.com/send"]'))
+            .map(a => {
+              const m = a.href.match(/phone=([0-9+]+)/i) || a.href.match(/wa\.me\/([0-9+]+)/i);
+              return m ? m[1] : '';
+            })
+            .filter(Boolean);
+
+          // Regex search in text for phone/whatsapp
+          const phoneInText = bodyText.match(/(?:whatsapp|contact|phone|call|mobile|reach out|apply via|hr)[:\s\-–]*([+]?[0-9\s\-]{10,15})/i) ||
+            bodyText.match(/(\+91[\s\-]?[6-9]\d{9})/i) ||
+            bodyText.match(/\b([6-9]\d{9})\b/);
+
+          const rawPhone = telLinks[0] || waLinks[0] || (phoneInText ? phoneInText[1].trim() : '');
+          const cleanPhone = rawPhone ? rawPhone.replace(/[^\d+]/g, '') : '';
+          const contactPhone = cleanPhone && cleanPhone.replace(/\D/g, '').length >= 10 ? cleanPhone : '';
 
           // Look for posted time e.g. "5h ago", "2d ago", "1 day ago"
           const postedMatch = bodyText.match(/(\d+\s*(?:m|h|d|w|mo|y|min|mins|minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years)\s*ago)/i);
@@ -1432,7 +1467,7 @@ exports.syncHireDoor = async (req, res) => {
           } catch (e) {}
         }
 
-        // Apply link resolution: ONLY genuine external company apply URL or company mailto. NEVER hiredoor.in!
+        // Apply link resolution: ONLY genuine external company apply URL, company mailto, or employer contact number. NEVER hiredoor.in!
         let finalApplyLink = '';
         if (externalApplyUrl && !externalApplyUrl.toLowerCase().includes('hiredoor.in')) {
           finalApplyLink = externalApplyUrl;
@@ -1442,9 +1477,16 @@ exports.syncHireDoor = async (req, res) => {
           finalApplyLink = `mailto:${validApplyEmail}`;
         }
 
-        // Skip adding jobs that don't have company apply links or company emails
-        if (!finalApplyLink && !validApplyEmail) {
-          logScraper(`Skipping "${jobData.title}" (${jobData.companyName || 'Unknown'}) - no direct company apply link or email found.`, 'warn');
+        // When apply link or email is not found, look for contact number as requested
+        const validContactPhone = jobData.contactPhone ? jobData.contactPhone.trim() : '';
+        if (!finalApplyLink && !validApplyEmail && validContactPhone) {
+          finalApplyLink = `tel:${validContactPhone}`;
+          logScraper(`[Contact Found] "${jobData.title}" has no direct link/email, using contact phone: ${validContactPhone}`, 'info');
+        }
+
+        // Skip adding jobs only if neither apply link, email, nor contact number is available
+        if (!finalApplyLink && !validApplyEmail && !validContactPhone) {
+          logScraper(`Skipping "${jobData.title}" (${jobData.companyName || 'Unknown'}) - no direct company apply link, email, or contact number found.`, 'warn');
           continue;
         }
 

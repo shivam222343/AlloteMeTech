@@ -65,15 +65,16 @@ export function useJobApply() {
     }
 
     const rawApplyLink = (job.applyLink || '').trim();
-    const cleanApplyLink = (rawApplyLink && !rawApplyLink.toLowerCase().includes('hiredoor') && !rawApplyLink.startsWith('mailto:')) ? rawApplyLink : '';
+    const cleanApplyLink = (rawApplyLink && !rawApplyLink.toLowerCase().includes('hiredoor') && !rawApplyLink.startsWith('mailto:') && !rawApplyLink.startsWith('tel:')) ? rawApplyLink : '';
     const cleanEmail = (job.applyEmail && !job.applyEmail.toLowerCase().includes('hiredoor') && !job.applyEmail.toLowerCase().includes('alloteme'))
       ? job.applyEmail.trim()
       : (rawApplyLink.startsWith('mailto:') && !rawApplyLink.toLowerCase().includes('hiredoor') ? rawApplyLink.replace(/^mailto:/i, '').split('?')[0].trim() : '');
+    const cleanPhone = (job.contactPhone || (rawApplyLink.startsWith('tel:') ? rawApplyLink.replace(/^tel:/i, '').trim() : '')).trim();
 
-    const link = cleanApplyLink || (cleanEmail ? `mailto:${cleanEmail}` : null);
+    const link = cleanApplyLink || (cleanEmail ? `mailto:${cleanEmail}` : (cleanPhone ? `tel:${cleanPhone}` : null));
 
     if (!link) {
-      toast.error('No direct company application link or email available for this position');
+      toast.error('No direct company application link, email, or contact number available for this position');
       return;
     }
 
@@ -102,7 +103,7 @@ export function useJobApply() {
       }
     }
 
-    if (link.startsWith('mailto:')) {
+    if (link.startsWith('mailto:') || link.startsWith('tel:')) {
       window.location.href = link;
     } else {
       window.open(link, '_blank', 'noopener,noreferrer');
