@@ -11,9 +11,17 @@ function timeAgo(date) {
   return formatTimeAgo(date);
 }
 
+const isValidCompanyLogo = (url) => {
+  if (!url || typeof url !== 'string') return false;
+  const clean = url.trim().toLowerCase();
+  if (!clean.startsWith('http://') && !clean.startsWith('https://')) return false;
+  return !/google\.com\/s2\/favicons|bing\.com|linkedin|instagram|whatsapp|facebook|twitter|youtube|googleusercontent|avatar|og-image|open%20graph|landingpage/i.test(clean);
+};
+
 export default function JobDetail() {
   const { slug } = useParams();
   const { user, hasReachedLimit, handleApply } = useJobApply();
+  const [imgError, setImgError] = useState(false);
   const { data, isLoading, isError } = useQuery({
     queryKey: ['job', slug],
     queryFn: () => jobsApi.getOne(slug).then(r => r.data),
@@ -31,15 +39,6 @@ export default function JobDetail() {
       <Link to="/jobs" className="btn btn-ghost btn-sm mt-4">← Back to Jobs</Link>
     </div>
   );
-
-  const [imgError, setImgError] = useState(false);
-
-  const isValidCompanyLogo = (url) => {
-    if (!url || typeof url !== 'string') return false;
-    const clean = url.trim().toLowerCase();
-    if (!clean.startsWith('http://') && !clean.startsWith('https://')) return false;
-    return !/google\.com\/s2\/favicons|bing\.com|linkedin|instagram|whatsapp|facebook|twitter|youtube|googleusercontent|avatar|og-image|open%20graph|landingpage/i.test(clean);
-  };
 
   // Priority 1: First use uploaded company logo (from Company document)
   // Priority 2: If not available, use scraped logo (job.companyLogo)
