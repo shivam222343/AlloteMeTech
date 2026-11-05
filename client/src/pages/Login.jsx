@@ -20,7 +20,23 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const fromState = location.state?.from;
-  const from = (typeof fromState === 'string' ? fromState : (fromState?.pathname ? `${fromState.pathname}${fromState.search || ''}` : null)) || '/dashboard';
+  const rawFrom = (typeof fromState === 'string' ? fromState : (fromState?.pathname ? `${fromState.pathname}${fromState.search || ''}` : null)) || '/dashboard';
+
+  // Sanitize target destination to ensure it stays on the local/current origin
+  let targetFrom = '/dashboard';
+  if (rawFrom) {
+    if (rawFrom.startsWith('/') && !rawFrom.startsWith('//')) {
+      targetFrom = rawFrom;
+    } else {
+      try {
+        const parsed = new URL(rawFrom, window.location.origin);
+        if (parsed.origin === window.location.origin) {
+          targetFrom = `${parsed.pathname}${parsed.search || ''}${parsed.hash || ''}`;
+        }
+      } catch {}
+    }
+  }
+
   const [showPw, setShowPw] = useState(false);
 
   useEffect(() => {
@@ -41,7 +57,7 @@ const Login = () => {
       await login(data);
       toast.success('Welcome back!');
       window.scrollTo(0, 0);
-      navigate(from, { replace: true });
+      navigate(targetFrom, { replace: true });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Login failed');
     }
@@ -50,7 +66,8 @@ const Login = () => {
   const handleGoogle = () => {
     const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
     const authUrl = baseUrl.endsWith('/api') ? `${baseUrl}/auth/google` : `${baseUrl}/api/auth/google`;
-    window.location.href = authUrl;
+    const originParam = encodeURIComponent(window.location.origin);
+    window.location.href = `${authUrl}?origin=${originParam}`;
   };
 
   return (

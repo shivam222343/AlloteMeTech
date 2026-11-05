@@ -65,8 +65,27 @@ exports.login = async (req, res) => {
   return sendTokens(res, user, 200, 'Login successful');
 };
 
+// ─── Helper: Resolve Client URL dynamically (supports localhost & production) ──
+function resolveClientUrl(req) {
+  const stateOrigin = req.query?.state;
+  if (stateOrigin) {
+    try {
+      const parsed = new URL(stateOrigin);
+      const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+      const isTrustedDomain = parsed.hostname.endsWith('alloteme.online') || parsed.hostname.endsWith('netlify.app');
+      if (isLocalhost || isTrustedDomain) {
+        return parsed.origin;
+      }
+    } catch {}
+  }
+  return process.env.CLIENT_URL || 'http://localhost:5173';
+}
+
+exports.resolveClientUrl = resolveClientUrl;
+
 // ─── Google OAuth Callback ────────────────────────────────────────────────────
 exports.googleCallback = async (req, res) => {
+  const clientUrl = resolveClientUrl(req);
   try {
     const user = req.user;
     const crypto = require('crypto');
@@ -76,9 +95,9 @@ exports.googleCallback = async (req, res) => {
 
     const accessToken = generateAccessToken(user._id, user.role, sessionToken);
 
-    res.redirect(`${process.env.CLIENT_URL}/dashboard?token=${accessToken}`);
+    res.redirect(`${clientUrl}/dashboard?token=${accessToken}`);
   } catch {
-    res.redirect(`${process.env.CLIENT_URL}/login?error=oauth_failed`);
+    res.redirect(`${clientUrl}/login?error=oauth_failed`);
   }
 };
 

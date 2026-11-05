@@ -41,7 +41,8 @@ const Signup = () => {
   const handleGoogle = () => {
     const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
     const authUrl = baseUrl.endsWith('/api') ? `${baseUrl}/auth/google` : `${baseUrl}/api/auth/google`;
-    window.location.href = authUrl;
+    const originParam = encodeURIComponent(window.location.origin);
+    window.location.href = `${authUrl}?origin=${originParam}`;
   };
 
   return (
