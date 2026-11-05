@@ -1091,234 +1091,312 @@ function ManageJobsTab() {
         <p>"Sync HireDoor" logs into <strong>hiredoor.in</strong>, opens each verified job card, scrapes full descriptions and requirements, and clicks "Apply Now" to extract the direct application link.</p>
       </div>
 
-      {/* Sync Modal */}
+      {/* Sync Modal (Landscape with Two Sections & Pinned Actions) */}
       {syncModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-bg-card border border-border rounded-xl w-full max-w-md p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-accent-blue" />
-                Sync Jobs from HireDoor
-              </h3>
-              <button type="button" onClick={() => setSyncModalOpen(false)} className="btn-icon btn-ghost">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-bg-card border border-border rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-bg-secondary/40 flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-accent-blue/10 border border-accent-blue/30 flex items-center justify-center text-accent-blue">
+                  <RefreshCw className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary">Sync Jobs from HireDoor</h3>
+                  <p className="text-[11px] text-text-muted">Automated scraping with verified direct company links</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSyncModalOpen(false)}
+                className="btn-icon btn-ghost w-8 h-8 text-text-muted hover:text-text-primary"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
             
-            <p className="text-xs text-text-muted leading-relaxed">
-              The scraper logs into HireDoor, toggles to your chosen category, browses verified jobs, and extracts direct company application links.
-            </p>
+            {/* Modal Body: Landscape 2 Sections */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                
+                {/* ── Section 1: Left Column (Category & Features) ── */}
+                <div className="md:col-span-5 space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-text-primary flex items-center justify-between mb-1.5">
+                      <span>1. Select Job Category:</span>
+                      <span className="text-[10px] text-accent-blue font-mono font-medium">Toggles Vertical</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setSyncCategory('Tech')}
+                        className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                          syncCategory === 'Tech'
+                            ? 'bg-accent-blue/15 border-accent-blue text-accent-blue shadow-sm ring-2 ring-accent-blue/30 font-bold'
+                            : 'bg-bg-secondary border-border text-text-muted hover:border-border-hover'
+                        }`}
+                      >
+                        <span className="text-xl mb-1">💻</span>
+                        <span className="text-xs text-text-primary font-bold">Tech Jobs</span>
+                        <span className="text-[10px] text-text-muted mt-0.5">hiredoor.in/jobs</span>
+                      </button>
 
-            {/* Portal Mode Selection: Tech vs Non-Tech */}
-            <div className="space-y-1.5 p-3 rounded-lg bg-bg-secondary border border-border">
-              <label className="text-xs font-bold text-text-primary flex items-center justify-between">
-                <span>1. Select Job Category:</span>
-                <span className="text-[10px] text-accent-blue font-mono">Toggles HireDoor Vertical</span>
-              </label>
-              <div className="grid grid-cols-2 gap-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setSyncCategory('Non-Tech')}
+                        className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                          syncCategory === 'Non-Tech'
+                            ? 'bg-purple-600/15 border-purple-500 text-purple-400 shadow-sm ring-2 ring-purple-500/30 font-bold'
+                            : 'bg-bg-secondary border-border text-text-muted hover:border-border-hover'
+                        }`}
+                      >
+                        <span className="text-xl mb-1">💼</span>
+                        <span className="text-xs text-text-primary font-bold">Non-Tech Jobs</span>
+                        <span className="text-[10px] text-text-muted mt-0.5">hiredoor.in/non-tech</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Feature Information Card */}
+                  <div className="p-3.5 rounded-xl bg-bg-secondary/70 border border-border text-xs space-y-2">
+                    <div className="font-semibold text-text-primary flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-text-faint">
+                      <Sparkles className="w-3.5 h-3.5 text-accent-blue" />
+                      Scraper Intelligence
+                    </div>
+                    <ul className="space-y-1.5 text-[11px] text-text-muted">
+                      <li className="flex items-start gap-1.5">
+                        <span className="text-accent-green font-bold">✓</span>
+                        <span><strong>Direct Links:</strong> Clicks "Apply Now" to extract external company career URLs.</span>
+                      </li>
+                      <li className="flex items-start gap-1.5">
+                        <span className="text-accent-blue font-bold">✓</span>
+                        <span><strong>Duplicate Filter:</strong> Skips cards already present in your database.</span>
+                      </li>
+                      <li className="flex items-start gap-1.5">
+                        <span className="text-purple-400 font-bold">✓</span>
+                        <span><strong>Scraped Time:</strong> Stamps date/time and category on every saved job.</span>
+                      </li>
+                      <li className="flex items-start gap-1.5">
+                        <span className="text-accent-yellow font-bold">✓</span>
+                        <span><strong>Live Terminal:</strong> Real-time streaming logs with stop capability.</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* ── Section 2: Right Column (Sync Strategy & Options) ── */}
+                <div className="md:col-span-7 space-y-3">
+                  <label className="text-xs font-bold text-text-primary flex items-center justify-between">
+                    <span>2. Select Crawling Strategy:</span>
+                    <span className="text-[10px] text-text-muted font-normal">Choose scope</span>
+                  </label>
+
+                  {/* Mode 1: Until last added / incremental */}
+                  <label
+                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      syncMode === 'until_last_added'
+                        ? 'bg-accent-blue/10 border-accent-blue/50 text-text-primary ring-1 ring-accent-blue/20'
+                        : 'bg-bg-secondary/60 border-border text-text-muted hover:border-border-hover'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="syncMode"
+                      value="until_last_added"
+                      checked={syncMode === 'until_last_added'}
+                      onChange={() => setSyncMode('until_last_added')}
+                      className="mt-1 text-accent-blue"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-text-primary">Sync All New Jobs</span>
+                        <span className="text-[9px] px-1.5 py-0.2 bg-accent-green/10 text-accent-green font-bold rounded">Recommended</span>
+                      </div>
+                      <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
+                        Scrapes recent job cards until it reaches the last job already added to your database (stops automatically when duplicate is found).
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Mode 2: Specific count */}
+                  <label
+                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      syncMode === 'count'
+                        ? 'bg-accent-blue/10 border-accent-blue/50 text-text-primary ring-1 ring-accent-blue/20'
+                        : 'bg-bg-secondary/60 border-border text-text-muted hover:border-border-hover'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="syncMode"
+                      value="count"
+                      checked={syncMode === 'count'}
+                      onChange={() => setSyncMode('count')}
+                      className="mt-1 text-accent-blue"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-text-primary">Scrape Specific Count</span>
+                        {syncMode === 'count' && (
+                          <span className="text-xs font-bold font-mono text-accent-blue">{syncLimit} jobs</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
+                        Scrapes an exact batch of recent job cards, traversing multiple pages as needed and skipping existing jobs.
+                      </p>
+                      {syncMode === 'count' && (
+                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            className="input text-xs py-1 w-24 font-mono font-bold"
+                            value={syncLimit}
+                            onChange={(e) => setSyncLimit(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                          />
+                          <span className="text-[11px] text-text-muted">recent cards (1 – 100)</span>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+
+                  {/* Mode 3: Specific Page Numbers */}
+                  <label
+                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      syncMode === 'pages'
+                        ? 'bg-accent-blue/10 border-accent-blue/50 text-text-primary ring-1 ring-accent-blue/20'
+                        : 'bg-bg-secondary/60 border-border text-text-muted hover:border-border-hover'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="syncMode"
+                      value="pages"
+                      checked={syncMode === 'pages'}
+                      onChange={() => setSyncMode('pages')}
+                      className="mt-1 text-accent-blue"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-text-primary">Select Specific Page Numbers (1, 2, 3...)</span>
+                        {syncMode === 'pages' && (
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-accent-blue/20 text-accent-blue">
+                            {selectedPages.length} {selectedPages.length === 1 ? 'page' : 'pages'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
+                        Scrapes jobs exclusively from the selected HireDoor page numbers one by one.
+                      </p>
+
+                      {syncMode === 'pages' && (
+                        <div className="mt-2.5 pt-2.5 border-t border-border/50 space-y-2.5" onClick={e => e.stopPropagation()}>
+                          {/* Clickable Quick Page Pills */}
+                          <div>
+                            <div className="text-[10px] text-text-faint uppercase font-bold mb-1.5">Toggle Page Numbers:</div>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(pNum => (
+                                <button
+                                  key={pNum}
+                                  type="button"
+                                  onClick={() => togglePageSelection(pNum)}
+                                  className={`w-7 h-7 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                                    selectedPages.includes(pNum)
+                                      ? 'bg-accent-blue text-white border-accent-blue shadow-sm'
+                                      : 'bg-bg-card text-text-muted border-border hover:border-accent-blue/50'
+                                  }`}
+                                >
+                                  {pNum}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Manual input for custom page numbers */}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="e.g. 1, 2, 3, 4"
+                                value={pagesInputText}
+                                onChange={(e) => handlePagesInputChange(e.target.value)}
+                                className="input text-xs py-1 flex-1 font-mono"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPages([1, 2, 3, 4]);
+                                  setPagesInputText('1, 2, 3, 4');
+                                }}
+                                className="btn btn-ghost btn-sm text-[11px] py-1 px-2 border border-border"
+                              >
+                                1 – 4
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPages([1, 2, 3, 4, 5]);
+                                  setPagesInputText('1, 2, 3, 4, 5');
+                                }}
+                                className="btn btn-ghost btn-sm text-[11px] py-1 px-2 border border-border"
+                              >
+                                1 – 5
+                              </button>
+                            </div>
+                          </div>
+
+                          <p className="text-[11px] text-text-muted">
+                            Pages to scrape one by one: <strong className="text-accent-blue font-bold font-mono">{selectedPages.join(', ')}</strong>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Modal Footer (Pinned at Bottom) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-t border-border bg-bg-secondary/40 flex-shrink-0">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-text-faint text-[11px]">Selected:</span>
+                <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] border ${
+                  syncCategory === 'Non-Tech'
+                    ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                    : 'bg-accent-blue/15 text-accent-blue border-accent-blue/30'
+                }`}>
+                  {syncCategory === 'Non-Tech' ? '💼 Non-Tech' : '💻 Tech'}
+                </span>
+                <span className="text-text-muted text-[11px]">
+                  {syncMode === 'until_last_added'
+                    ? 'Sync All New'
+                    : syncMode === 'count'
+                    ? `Target ${syncLimit} cards`
+                    : `Pages: ${selectedPages.join(', ')}`}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 ml-auto">
                 <button
                   type="button"
-                  onClick={() => setSyncCategory('Tech')}
-                  className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-center transition-all ${
-                    syncCategory === 'Tech'
-                      ? 'bg-accent-blue/15 border-accent-blue text-accent-blue shadow-sm ring-2 ring-accent-blue/30'
-                      : 'bg-bg-card border-border text-text-muted hover:border-border-hover'
-                  }`}
+                  onClick={() => setSyncModalOpen(false)}
+                  className="btn btn-ghost btn-sm px-4"
                 >
-                  <span className="text-base">💻</span>
-                  <span className="text-xs font-bold text-text-primary mt-1">Tech Jobs</span>
-                  <span className="text-[10px] text-text-muted">hiredoor.in/jobs</span>
+                  Cancel
                 </button>
-
                 <button
                   type="button"
-                  onClick={() => setSyncCategory('Non-Tech')}
-                  className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-center transition-all ${
-                    syncCategory === 'Non-Tech'
-                      ? 'bg-purple-600/15 border-purple-500 text-purple-400 shadow-sm ring-2 ring-purple-500/30'
-                      : 'bg-bg-card border-border text-text-muted hover:border-border-hover'
-                  }`}
+                  onClick={handleSync}
+                  className="btn btn-primary btn-sm px-4 flex items-center gap-1.5 font-bold shadow-md"
                 >
-                  <span className="text-base">💼</span>
-                  <span className="text-xs font-bold text-text-primary mt-1">Non-Tech Jobs</span>
-                  <span className="text-[10px] text-text-muted">hiredoor.in/non-tech</span>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Start Sync
                 </button>
               </div>
             </div>
 
-            <div className="space-y-2.5">
-              <label className="text-xs font-medium text-text-primary">
-                Select Sync Strategy:
-              </label>
-
-              {/* Mode 1: Until last added / incremental */}
-              <label
-                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                  syncMode === 'until_last_added'
-                    ? 'bg-accent-blue/10 border-accent-blue/50 text-text-primary'
-                    : 'bg-bg-secondary border-border text-text-muted hover:border-border-hover'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="syncMode"
-                  value="until_last_added"
-                  checked={syncMode === 'until_last_added'}
-                  onChange={() => setSyncMode('until_last_added')}
-                  className="mt-0.5 text-accent-blue"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold text-text-primary">Sync All New Jobs</span>
-                    <span className="text-[10px] px-1.5 py-0.2 bg-accent-green/10 text-accent-green font-medium rounded">Recommended</span>
-                  </div>
-                  <p className="text-[11px] text-text-muted mt-0.5 leading-normal">
-                    Scrapes all recent job cards until it reaches the last job already added to your database (stops automatically when duplicate is found).
-                  </p>
-                </div>
-              </label>
-
-              {/* Mode 2: Specific count */}
-              <label
-                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                  syncMode === 'count'
-                    ? 'bg-accent-blue/10 border-accent-blue/50 text-text-primary'
-                    : 'bg-bg-secondary border-border text-text-muted hover:border-border-hover'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="syncMode"
-                  value="count"
-                  checked={syncMode === 'count'}
-                  onChange={() => setSyncMode('count')}
-                  className="mt-0.5 text-accent-blue"
-                />
-                <div className="flex-1">
-                  <span className="text-xs font-semibold text-text-primary">Scrape Specific Count</span>
-                  <p className="text-[11px] text-text-muted mt-0.5 leading-normal">
-                    Scrapes an exact batch of the most recent job cards. If count is more than 20, it automatically traverses multiple pages (approx. 20 jobs/page) and skips any duplicate jobs already in your database.
-                  </p>
-                  {syncMode === 'count' && (
-                    <div className="flex items-center gap-2 mt-2" onClick={e => e.stopPropagation()}>
-                      <input
-                        type="number"
-                        min="1"
-                        max="100"
-                        className="input text-xs py-1 w-24"
-                        value={syncLimit}
-                        onChange={(e) => setSyncLimit(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
-                      />
-                      <span className="text-xs text-text-muted">recent cards (1 – 100)</span>
-                    </div>
-                  )}
-                </div>
-              </label>
-
-              {/* Mode 3: Specific Page Numbers (e.g. 1, 2, 3, 4) */}
-              <label
-                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                  syncMode === 'pages'
-                    ? 'bg-accent-blue/10 border-accent-blue/50 text-text-primary'
-                    : 'bg-bg-secondary border-border text-text-muted hover:border-border-hover'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="syncMode"
-                  value="pages"
-                  checked={syncMode === 'pages'}
-                  onChange={() => setSyncMode('pages')}
-                  className="mt-0.5 text-accent-blue"
-                />
-                <div className="flex-1">
-                  <span className="text-xs font-semibold text-text-primary">Select Specific Page Numbers (1, 2, 3, 4...)</span>
-                  <p className="text-[11px] text-text-muted mt-0.5 leading-normal">
-                    Scrapes jobs from only the selected HireDoor page numbers one by one.
-                  </p>
-                  {syncMode === 'pages' && (
-                    <div className="mt-2.5 space-y-2.5" onClick={e => e.stopPropagation()}>
-                      {/* Clickable Quick Page Pills */}
-                      <div>
-                        <div className="text-[10px] text-text-faint uppercase font-bold mb-1.5">Toggle Page Numbers:</div>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(pNum => (
-                            <button
-                              key={pNum}
-                              type="button"
-                              onClick={() => togglePageSelection(pNum)}
-                              className={`w-7 h-7 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                                selectedPages.includes(pNum)
-                                  ? 'bg-accent-blue text-white border-accent-blue shadow-sm'
-                                  : 'bg-bg-card text-text-muted border-border hover:border-accent-blue/50'
-                              }`}
-                            >
-                              {pNum}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Manual input for custom page numbers */}
-                      <div>
-                        <div className="text-[10px] text-text-faint uppercase font-bold mb-1">Enter Page Numbers (comma separated):</div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            placeholder="e.g. 1, 2, 3, 4"
-                            value={pagesInputText}
-                            onChange={(e) => handlePagesInputChange(e.target.value)}
-                            className="input text-xs py-1 flex-1 font-mono"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedPages([1, 2, 3, 4]);
-                              setPagesInputText('1, 2, 3, 4');
-                            }}
-                            className="btn btn-ghost btn-sm text-[11px] py-1 px-2 border border-border"
-                          >
-                            1 – 4
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedPages([1, 2, 3, 4, 5]);
-                              setPagesInputText('1, 2, 3, 4, 5');
-                            }}
-                            className="btn btn-ghost btn-sm text-[11px] py-1 px-2 border border-border"
-                          >
-                            1 – 5
-                          </button>
-                        </div>
-                      </div>
-
-                      <p className="text-[11px] text-text-muted">
-                        Pages to scrape one by one: <strong className="text-accent-blue font-bold font-mono">{selectedPages.join(', ')}</strong> ({selectedPages.length} {selectedPages.length === 1 ? 'page' : 'pages'})
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </label>
-            </div>
-
-            <div className="flex justify-end items-center gap-2 pt-2 border-t border-border">
-              <button
-                type="button"
-                onClick={() => setSyncModalOpen(false)}
-                className="btn btn-ghost btn-sm"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSync}
-                className="btn btn-primary btn-sm flex items-center gap-1.5"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Start Sync
-              </button>
-            </div>
           </div>
         </div>
       )}
