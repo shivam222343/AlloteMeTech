@@ -9,6 +9,21 @@ function generateSlug(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now();
 }
 
+function replaceHiredoorWithAlloteme(val) {
+  if (!val) return val;
+  if (typeof val === 'string') {
+    return val
+      .replace(/https?:\/\/(?:www\.)?hiredoor\.in[^\s]*/gi, '')
+      .replace(/hiredoor\.in/gi, 'Tech AlloteMe')
+      .replace(/hiredoor/gi, 'Tech AlloteMe')
+      .replace(/hire\s*door/gi, 'Tech AlloteMe');
+  }
+  if (Array.isArray(val)) {
+    return val.map(replaceHiredoorWithAlloteme).filter(Boolean);
+  }
+  return val;
+}
+
 // ── Public: Get All Jobs ──────────────────────────────────────────────────────
 exports.getJobs = async (req, res) => {
   const { page = 1, limit = 20, search, jobType, workMode, company, tag, category } = req.query;
@@ -589,6 +604,10 @@ Return ONLY this JSON structure (no extra text):
     parsed = JSON.parse(cleaned);
     if (parsed.applyEmail && parsed.applyEmail.toLowerCase().includes('hiredoor')) parsed.applyEmail = '';
     if (parsed.applyLink && parsed.applyLink.toLowerCase().includes('hiredoor') && parsed.applyLink.toLowerCase().includes('mailto:')) parsed.applyLink = '';
+    if (parsed.description) parsed.description = replaceHiredoorWithAlloteme(parsed.description);
+    if (parsed.responsibilities) parsed.responsibilities = replaceHiredoorWithAlloteme(parsed.responsibilities);
+    if (parsed.requirements) parsed.requirements = replaceHiredoorWithAlloteme(parsed.requirements);
+    if (parsed.title) parsed.title = replaceHiredoorWithAlloteme(parsed.title);
   } catch (e) {
     return ApiResponse.error(res, 'AI could not parse the job description. Please try manual form.', 422);
   }
@@ -643,9 +662,13 @@ Return ONLY the JSON array, nothing else.`;
   try {
     jobs = JSON.parse(cleaned);
     if (!Array.isArray(jobs)) jobs = [jobs];
-    // Sanitize any accidental hiredoor email or mailto
+    // Sanitize any accidental hiredoor email or mailto, and rebrand text to Tech AlloteMe
     jobs = jobs.map(j => ({
       ...j,
+      title: replaceHiredoorWithAlloteme(j.title),
+      description: replaceHiredoorWithAlloteme(j.description),
+      responsibilities: replaceHiredoorWithAlloteme(j.responsibilities),
+      requirements: replaceHiredoorWithAlloteme(j.requirements),
       applyEmail: (j.applyEmail && !j.applyEmail.toLowerCase().includes('hiredoor') && !j.applyEmail.toLowerCase().includes('alloteme')) ? j.applyEmail.trim() : '',
       applyLink: (j.applyLink && j.applyLink.toLowerCase().includes('hiredoor') && j.applyLink.toLowerCase().includes('mailto:')) ? '' : j.applyLink,
     }));
@@ -694,12 +717,16 @@ exports.bulkCreateJobs = async (req, res) => {
 
       await Job.create({
         ...rest,
+        title: replaceHiredoorWithAlloteme(rest.title) || 'Open Position',
+        description: replaceHiredoorWithAlloteme(rest.description),
+        responsibilities: replaceHiredoorWithAlloteme(rest.responsibilities),
+        requirements: replaceHiredoorWithAlloteme(rest.requirements),
         applyEmail: cleanApplyEmail,
         applyLink: cleanApplyLink || '',
         slug,
         companyTag: companyTag || '',
         company: companyId,
-        companyName: companyName || rest.companyName || '',
+        companyName: replaceHiredoorWithAlloteme(companyName || rest.companyName || ''),
         companyLogo: companyLogo || rest.companyLogo || '',
         category: rest.category === 'Non-Tech' ? 'Non-Tech' : 'Tech',
         postedAt,
@@ -1036,7 +1063,9 @@ exports.syncHireDoor = async (req, res) => {
     if (HIREDOOR_EMAIL && HIREDOOR_PASSWORD) {
       try {
         logScraper(`Attempting login at https://hiredoor.in/login (credentials source: ${creds.source})...`, 'info', { currentStep: 'Logging in to HireDoor' });
-        await page.goto('https://hiredoor.in/login', { waitUntil: 'networkidle2', timeout: 30000 });
+        await page.goto('https://hiredoor.in/login', { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await sleep(1500);
+
         await page.waitForSelector('input[type="email"]', { timeout: 8000 });
         await page.type('input[type="email"]', HIREDOOR_EMAIL);
         await page.type('input[type="password"]', HIREDOOR_PASSWORD);
@@ -1045,12 +1074,12 @@ exports.syncHireDoor = async (req, res) => {
         await page.evaluate(() => {
           const email = document.querySelector('input[type="email"]');
           const form = email ? email.closest('form') : null;
-          const btn = form ? form.querySelector('button') : null;
+          const btn = form ? form.querySelector('button[type="submit"], button') : null;
           if (btn) btn.click();
         });
 
         await sleep(3500);
-        logScraper('HireDoor login submitted successfully.', 'success');
+        logScraper(`HireDoor session authenticated for ${maskEmail(HIREDOOR_EMAIL)}.`, 'success');
       } catch (loginErr) {
         logScraper(`HireDoor login note: ${loginErr.message}. Proceeding with public access.`, 'warn');
       }
@@ -1090,9 +1119,9 @@ exports.syncHireDoor = async (req, res) => {
 
         try {
           await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
-          await sleep(2000);
+          await sleep(1500);
 
-          // Ensure vertical toggle matches selected category on HireDoor
+          // Ensure vertical toggle matches selected category on HireDoor and wait for render
           await page.evaluate((targetCategory) => {
             try {
               const isNonTech = targetCategory === 'Non-Tech';
@@ -1100,12 +1129,12 @@ exports.syncHireDoor = async (req, res) => {
               localStorage.setItem('hd-vertical', isNonTech ? 'non-tech' : 'tech');
               document.cookie = `hd-vertical=${isNonTech ? 'non-tech' : 'tech'}; path=/; domain=hiredoor.in`;
 
-              const btn = document.querySelector(`button[aria-label="${targetLabel}" i]`) ||
-                Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim().toLowerCase() === targetLabel.toLowerCase());
+              const buttons = Array.from(document.querySelectorAll('button'));
+              const btn = buttons.find(b => b.innerText.trim().toLowerCase() === targetLabel.toLowerCase());
               if (btn) btn.click();
             } catch (e) {}
           }, category);
-          await sleep(1000);
+          await sleep(2500);
         } catch (pageNavErr) {
           logScraper(`Failed to load ${pageUrl}: ${pageNavErr.message}`, 'error');
           continue;
@@ -1113,7 +1142,8 @@ exports.syncHireDoor = async (req, res) => {
 
         if (isSyncCancelled) break;
         const pageUrls = await extractJobLinksFromPage(page);
-        logScraper(`Found ${pageUrls.length} job cards on Page ${pNum}. Filtering duplicates...`, 'info');
+        let pageNewCount = 0;
+        let pageDupCount = 0;
 
         for (const cardUrl of pageUrls) {
           if (isSyncCancelled) break;
@@ -1123,12 +1153,16 @@ exports.syncHireDoor = async (req, res) => {
           const alreadyInDb = await Job.findOne({ sourceUrl: cardUrl }).select('_id title').lean();
           if (alreadyInDb) {
             duplicateCount++;
-            logScraper(`Job already exists in DB: ${alreadyInDb.title} (Skipping)`, 'info', { duplicateCount });
+            pageDupCount++;
+            logScraper(`[Already in DB] "${alreadyInDb.title}" (Skipped)`, 'info', { duplicateCount });
             continue;
           }
 
+          pageNewCount++;
           jobUrls.push(cardUrl);
         }
+
+        logScraper(`Page ${pNum} Summary: ${pageUrls.length} cards inspected (${pageNewCount} new queued, ${pageDupCount} already in database).`, 'step');
       }
     } else {
       const maxPagesToInspect = Math.max(Math.ceil(maxJobs / 15) + 3, 5);
@@ -1146,9 +1180,9 @@ exports.syncHireDoor = async (req, res) => {
         
         try {
           await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
-          await sleep(2000);
+          await sleep(1500);
 
-          // Ensure vertical toggle matches selected category on HireDoor
+          // Ensure vertical toggle matches selected category on HireDoor and wait for render
           await page.evaluate((targetCategory) => {
             try {
               const isNonTech = targetCategory === 'Non-Tech';
@@ -1156,12 +1190,12 @@ exports.syncHireDoor = async (req, res) => {
               localStorage.setItem('hd-vertical', isNonTech ? 'non-tech' : 'tech');
               document.cookie = `hd-vertical=${isNonTech ? 'non-tech' : 'tech'}; path=/; domain=hiredoor.in`;
 
-              const btn = document.querySelector(`button[aria-label="${targetLabel}" i]`) ||
-                Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim().toLowerCase() === targetLabel.toLowerCase());
+              const buttons = Array.from(document.querySelectorAll('button'));
+              const btn = buttons.find(b => b.innerText.trim().toLowerCase() === targetLabel.toLowerCase());
               if (btn) btn.click();
             } catch (e) {}
           }, category);
-          await sleep(1000);
+          await sleep(2500);
         } catch (pageNavErr) {
           logScraper(`Failed to load ${pageUrl}: ${pageNavErr.message}`, 'error');
           break;
@@ -1177,6 +1211,8 @@ exports.syncHireDoor = async (req, res) => {
         }
 
         // Check duplicates against DB so we don't add existing jobs
+        let pageNewCount = 0;
+        let pageDupCount = 0;
         for (const cardUrl of pageUrls) {
           if (isSyncCancelled) break;
           if (seenUrls.has(cardUrl)) continue;
@@ -1185,6 +1221,7 @@ exports.syncHireDoor = async (req, res) => {
           const alreadyInDb = await Job.findOne({ sourceUrl: cardUrl }).select('_id title').lean();
           if (alreadyInDb) {
             duplicateCount++;
+            pageDupCount++;
             if (mode === 'until_last_added') {
               logScraper(`Reached previously added job in DB: "${alreadyInDb.title}". Stopping incremental crawl.`, 'step', {
                 duplicateCount,
@@ -1192,15 +1229,17 @@ exports.syncHireDoor = async (req, res) => {
               stoppedAtDuplicate = true;
               break;
             } else {
-              logScraper(`Skipping duplicate already in DB: ${alreadyInDb.title}`, 'info', { duplicateCount });
+              logScraper(`[Already in DB] "${alreadyInDb.title}" (Skipped)`, 'info', { duplicateCount });
               continue;
             }
           }
 
+          pageNewCount++;
           jobUrls.push(cardUrl);
           if (jobUrls.length >= maxJobs) break;
         }
 
+        logScraper(`Page ${pageNum} Summary: Found ${pageUrls.length} cards (${pageNewCount} new queued, ${pageDupCount} already in database).`, 'info');
         pageNum++;
       }
     }
@@ -1423,20 +1462,33 @@ exports.syncHireDoor = async (req, res) => {
         // Priority 2: If not available, use scraped logo from HireDoor
         const finalCompanyLogo = resolvedLogo || jobData.companyLogo || '';
 
-        const slug = generateSlug(jobData.title || 'job');
+        // Clean and brand all scraped text fields: replace any HireDoor mention with Tech AlloteMe
+        const cleanTitle = replaceHiredoorWithAlloteme(jobData.title) || 'Open Position';
+        const rawCompany = companyName || jobData.companyName || 'Company';
+        const cleanCompanyName = replaceHiredoorWithAlloteme(rawCompany);
+        const cleanDescription = replaceHiredoorWithAlloteme(jobData.description);
+        const cleanResponsibilities = replaceHiredoorWithAlloteme(jobData.responsibilities);
+        const cleanRequirements = replaceHiredoorWithAlloteme(jobData.requirements);
+        const cleanTags = replaceHiredoorWithAlloteme(jobData.tags);
+        const cleanExperience = replaceHiredoorWithAlloteme(jobData.experience);
+        const cleanEligibleBatch = replaceHiredoorWithAlloteme(jobData.eligibleBatch);
+
+        const slug = generateSlug(cleanTitle);
 
         // Check for existing job to prevent duplicates
-        const existing = await Job.findOne({
-          $or: [
-            { sourceUrl: jobUrl },
-            { slug },
-            { title: new RegExp(`^${(jobData.title || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'), companyTag }
-          ]
-        });
+        const queryOr = [{ sourceUrl: jobUrl }];
+        if (slug) queryOr.push({ slug });
+        if (cleanTitle && companyTag && companyTag !== 'company' && companyTag.length > 2) {
+          queryOr.push({
+            title: new RegExp(`^${cleanTitle.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+            companyTag,
+          });
+        }
+        const existing = await Job.findOne({ $or: queryOr });
 
         if (existing) {
           duplicateCount++;
-          logScraper(`Duplicate job detected in DB: "${jobData.title}".`, 'info', { duplicateCount });
+          logScraper(`[Already in DB] "${cleanTitle}" at ${cleanCompanyName} (Skipping duplicate)`, 'info', { duplicateCount });
           if (mode === 'until_last_added') {
             stoppedAtDuplicate = true;
             break;
@@ -1445,11 +1497,11 @@ exports.syncHireDoor = async (req, res) => {
         }
 
         await Job.create({
-          title: jobData.title || 'Open Position',
+          title: cleanTitle,
           slug,
           company: companyId,
           companyTag,
-          companyName: companyName || jobData.companyName,
+          companyName: cleanCompanyName,
           companyLogo: finalCompanyLogo,
           category,
           scrapedAt: new Date(),
@@ -1457,12 +1509,12 @@ exports.syncHireDoor = async (req, res) => {
           workMode: jobData.workMode,
           jobType: jobData.jobType,
           salary: jobData.salary,
-          experience: jobData.experience,
-          eligibleBatch: jobData.eligibleBatch,
-          description: jobData.description,
-          responsibilities: jobData.responsibilities,
-          requirements: jobData.requirements,
-          tags: jobData.tags.length ? jobData.tags : [category === 'Non-Tech' ? 'Non-Tech' : 'Software'],
+          experience: cleanExperience,
+          eligibleBatch: cleanEligibleBatch,
+          description: cleanDescription,
+          responsibilities: cleanResponsibilities,
+          requirements: cleanRequirements,
+          tags: cleanTags.length ? cleanTags : [category === 'Non-Tech' ? 'Non-Tech' : 'Software'],
           applyLink: finalApplyLink,
           applyEmail: validApplyEmail,
           contactPhone: jobData.contactPhone || '',
@@ -1487,7 +1539,7 @@ exports.syncHireDoor = async (req, res) => {
           })(),
         });
         savedCount++;
-        logScraper(`[Saved #${savedCount}] "${jobData.title}" at ${jobData.companyName || 'Company'} [${category}]`, 'success', {
+        logScraper(`[Saved #${savedCount}] "${cleanTitle}" at ${cleanCompanyName} [${category}]`, 'success', {
           savedCount,
         });
       } catch (jobErr) {

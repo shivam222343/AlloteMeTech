@@ -583,50 +583,72 @@ function LiveSyncTerminal({ isOpen, onClose, syncState, syncLogs, syncing, onSto
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm animate-in fade-in">
       <div className="bg-[#0f141c] border border-border/80 rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-text-primary">
         {/* Terminal Window Titlebar */}
-        <div className="flex items-center justify-between px-4 py-3 bg-[#161b24] border-b border-border/60">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-[#161b24] border-b border-border/60 flex-shrink-0">
+          <div className="flex items-center justify-between sm:justify-start gap-2.5 min-w-0">
             {/* Mac style dots */}
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-[#ff5f56]" />
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-3 h-3 rounded-full bg-[#ff5f56] hover:opacity-80 transition-opacity cursor-pointer"
+                title="Close terminal"
+              />
               <span className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
               <span className="w-3 h-3 rounded-full bg-[#27c93f]" />
             </div>
-            <div className="flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-accent-blue" />
-              <span className="font-mono text-xs font-semibold text-text-primary">
-                hiredoor-automation@alloteme:~
+
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Terminal className="w-3.5 h-3.5 text-accent-blue flex-shrink-0" />
+              <span className="font-mono text-xs font-bold text-text-primary truncate">
+                <span className="hidden sm:inline">hiredoor-automation@</span>alloteme:~
               </span>
             </div>
-            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full uppercase font-bold border ${statusColor}`}>
+
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full uppercase font-bold border flex-shrink-0 ${statusColor}`}>
               {syncState?.status || (syncing ? 'RUNNING' : 'IDLE')}
             </span>
+
+            {/* Mobile-only Close button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="sm:hidden btn-icon btn-ghost text-text-primary hover:bg-white/10 w-7 h-7 flex-shrink-0 ml-auto border border-border/40 rounded-lg flex items-center justify-center"
+              title="Close terminal"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between sm:justify-end gap-2 flex-shrink-0">
             {syncState?.category && (
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${
                 syncState.category === 'Non-Tech'
                   ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
                   : 'bg-accent-blue/20 text-accent-blue border-accent-blue/40'
               }`}>
-                {syncState.category === 'Non-Tech' ? '💼 Non-Tech Portal' : '💻 Tech Portal'}
+                {syncState.category === 'Non-Tech' ? '💼 Non-Tech' : '💻 Tech'}
               </span>
             )}
-          </div>
 
-          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleCopyLogs}
-              className="btn btn-ghost btn-sm text-xs font-mono text-text-muted hover:text-text-primary py-1 px-2 border border-border/50"
+              className="btn btn-ghost btn-sm text-[11px] font-mono text-text-muted hover:text-text-primary py-1 px-2.5 border border-border/50 rounded-lg flex items-center gap-1.5"
               title="Copy all logs"
             >
-              <Copy className="w-3 h-3" /> Copy
+              <Copy className="w-3 h-3" />
+              <span>Copy</span>
             </button>
+
+            {/* Desktop Close button */}
             <button
               type="button"
               onClick={onClose}
-              className="btn-icon btn-ghost text-text-muted hover:text-text-primary w-7 h-7"
+              className="hidden sm:flex btn btn-ghost btn-sm text-xs font-mono text-text-primary hover:bg-white/10 py-1 px-2.5 border border-border/50 rounded-lg items-center gap-1"
               title="Close terminal"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
+              <span>Close</span>
             </button>
           </div>
         </div>
@@ -715,7 +737,7 @@ function LiveSyncTerminal({ isOpen, onClose, syncState, syncLogs, syncing, onSto
         </div>
 
         {/* Footer controls */}
-        <div className="flex items-center justify-between px-4 py-2.5 bg-[#161b24] border-t border-border/60 text-xs font-mono">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2 bg-[#161b24] border-t border-border/60 text-xs font-mono flex-shrink-0">
           <label className="flex items-center gap-2 cursor-pointer text-text-muted hover:text-text-primary select-none">
             <input
               type="checkbox"
@@ -723,10 +745,19 @@ function LiveSyncTerminal({ isOpen, onClose, syncState, syncLogs, syncing, onSto
               onChange={(e) => setAutoScroll(e.target.checked)}
               className="w-3.5 h-3.5 rounded border-border"
             />
-            <span>Auto-scroll terminal</span>
+            <span>Auto-scroll</span>
           </label>
-          <div className="text-[11px] text-text-faint">
-            {syncLogs.length} entries recorded
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-text-faint hidden sm:inline">
+              {syncLogs.length} entries recorded
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn btn-ghost btn-sm text-xs font-mono py-1 px-3 border border-border/50 text-text-primary hover:bg-white/10 rounded-lg"
+            >
+              Close Terminal
+            </button>
           </div>
         </div>
       </div>
