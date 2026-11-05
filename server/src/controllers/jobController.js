@@ -1283,6 +1283,18 @@ exports.syncHireDoor = async (req, res) => {
         jobPage.setDefaultNavigationTimeout(20000);
         jobPage.setDefaultTimeout(20000);
 
+        // Hook window.open BEFORE navigation to immediately capture exact apply URLs from React buttons (e.g. keka, lever, greenhouse)
+        await jobPage.evaluateOnNewDocument(() => {
+          window.__capturedApplyUrl = null;
+          const origOpen = window.open;
+          window.open = function(url, target, features) {
+            if (url && typeof url === 'string') {
+              window.__capturedApplyUrl = url;
+            }
+            return origOpen ? origOpen.call(window, url, target, features) : null;
+          };
+        });
+
         // Set up target listener to capture the external apply URL on click
         let externalApplyUrl = null;
         targetListener = async (target) => {
@@ -1438,15 +1450,33 @@ exports.syncHireDoor = async (req, res) => {
           };
         });
 
-        // Click Apply Now button to trigger external tab / modal
+        // Click Apply Now button to trigger window.open or target popup
         await jobPage.evaluate(() => {
           const btns = Array.from(document.querySelectorAll('button, a')).filter(el => 
-            el.innerText.trim().toLowerCase().includes('apply now')
+            /apply now|apply for this job/i.test(el.innerText || el.getAttribute('aria-label') || '')
           );
-          if (btns.length > 0) btns[0].click();
+          for (const btn of btns) {
+            try {
+              btn.click();
+            } catch (e) {}
+          }
         });
 
-        await sleep(2500);
+        await sleep(2000);
+
+        // Check if window.open captured the exact direct ATS apply link
+        const hookUrl = await jobPage.evaluate(() => window.__capturedApplyUrl).catch(() => null);
+        if (hookUrl && typeof hookUrl === 'string' && !hookUrl.includes('hiredoor.in')) {
+          let cleanHook = hookUrl;
+          if (cleanHook.includes('accounts.google.com') && cleanHook.includes('continue=')) {
+            try {
+              const u = new URL(cleanHook);
+              const cont = u.searchParams.get('continue');
+              if (cont) cleanHook = decodeURIComponent(cont);
+            } catch (e) {}
+          }
+          externalApplyUrl = cleanHook;
+        }
 
         if (targetListener) {
           browser.off('targetcreated', targetListener);
@@ -1454,16 +1484,57 @@ exports.syncHireDoor = async (req, res) => {
           targetListener = null;
         }
 
-        // If popup was blocked or delayed, check for any external company link on the page
+        // If popup was blocked or delayed, check ONLY for genuine job application/career links (NEVER company homepage / "Official website" links)
         if (!externalApplyUrl || externalApplyUrl.includes('hiredoor.in')) {
           try {
-            const pageExtLink = await jobPage.evaluate(() => {
-              const links = Array.from(document.querySelectorAll('a[href]'))
-                .map(a => a.href)
-                .filter(h => h && !h.includes('hiredoor.in') && !h.includes('javascript:') && !h.includes('whatsapp') && !h.includes('linkedin') && !h.includes('telegram') && !h.includes('alloteme'));
-              return links[0] || null;
+            const pageJobLink = await jobPage.evaluate(() => {
+              const allA = Array.from(document.querySelectorAll('a[href]'));
+              
+              // 1. Look for links matching ATS systems or career/job/apply keywords
+              const atsPatterns = [
+                'keka.com', 'greenhouse.io', 'lever.co', 'workday', 'myworkdayjobs', 'darwinbox',
+                'smartrecruiters', 'docs.google.com/forms', 'forms.gle', 'bamboohr', 'ashbyhq',
+                'job-boards', 'recruitee', 'taleo', '/apply', '/careers', '/jobs/'
+              ];
+
+              for (const a of allA) {
+                const href = (a.href || '').trim();
+                const text = (a.innerText || '').trim().toLowerCase();
+                if (!href || href.startsWith('javascript:') || href.includes('hiredoor.in') || href.includes('whatsapp') || href.includes('linkedin') || href.includes('telegram') || href.includes('alloteme')) {
+                  continue;
+                }
+
+                // Explicitly ignore "Official website", "Website", "Homepage"
+                if (/official website|website|home|homepage/i.test(text)) {
+                  continue;
+                }
+
+                const lowHref = href.toLowerCase();
+                const isATS = atsPatterns.some(p => lowHref.includes(p));
+                const isApplyText = /apply|submit application|view job/i.test(text);
+
+                if (isATS || isApplyText) {
+                  return href;
+                }
+              }
+
+              // 2. Look inside "How to Apply" section
+              const headings = Array.from(document.querySelectorAll('h2, h3, h4, div, span'));
+              const howToApplyHeading = headings.find(h => /how to apply/i.test(h.innerText));
+              if (howToApplyHeading) {
+                const parent = howToApplyHeading.closest('div, section') || howToApplyHeading.parentElement;
+                if (parent) {
+                  const linksInSection = Array.from(parent.querySelectorAll('a[href]'))
+                    .map(a => a.href)
+                    .filter(h => h && !h.includes('hiredoor.in') && !h.includes('whatsapp') && !h.includes('linkedin'));
+                  if (linksInSection.length > 0) return linksInSection[0];
+                }
+              }
+
+              return null;
             });
-            if (pageExtLink) externalApplyUrl = pageExtLink;
+
+            if (pageJobLink) externalApplyUrl = pageJobLink;
           } catch (e) {}
         }
 
