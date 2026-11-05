@@ -1468,10 +1468,10 @@ exports.syncHireDoor = async (req, res) => {
         const hookUrl = await jobPage.evaluate(() => window.__capturedApplyUrl).catch(() => null);
         if (hookUrl && typeof hookUrl === 'string' && !hookUrl.includes('hiredoor.in')) {
           let cleanHook = hookUrl;
-          if (cleanHook.includes('accounts.google.com') && cleanHook.includes('continue=')) {
+          if (cleanHook.includes('accounts.google.com')) {
             try {
               const u = new URL(cleanHook);
-              const cont = u.searchParams.get('continue');
+              const cont = u.searchParams.get('continue') || u.searchParams.get('followup');
               if (cont) cleanHook = decodeURIComponent(cont);
             } catch (e) {}
           }
@@ -1484,23 +1484,25 @@ exports.syncHireDoor = async (req, res) => {
           targetListener = null;
         }
 
-        // If popup was blocked or delayed, check ONLY for genuine job application/career links (NEVER company homepage / "Official website" links)
+        // If popup was blocked or delayed, check for Google Forms, ATS systems, or application links (NEVER company homepage / "Official website" links)
         if (!externalApplyUrl || externalApplyUrl.includes('hiredoor.in')) {
           try {
             const pageJobLink = await jobPage.evaluate(() => {
               const allA = Array.from(document.querySelectorAll('a[href]'));
+              const bodyText = document.body.innerText || '';
+              const html = document.documentElement.innerHTML || '';
               
-              // 1. Look for links matching ATS systems or career/job/apply keywords
+              // 1. First priority: Check all links for Google Forms or ATS portals
               const atsPatterns = [
+                'docs.google.com/forms', 'forms.gle', 'forms.office.com', 'typeform.com', 'tally.so',
                 'keka.com', 'greenhouse.io', 'lever.co', 'workday', 'myworkdayjobs', 'darwinbox',
-                'smartrecruiters', 'docs.google.com/forms', 'forms.gle', 'bamboohr', 'ashbyhq',
-                'job-boards', 'recruitee', 'taleo', '/apply', '/careers', '/jobs/'
+                'smartrecruiters', 'bamboohr', 'ashbyhq', 'job-boards', 'recruitee', 'taleo', '/apply', '/careers', '/jobs/'
               ];
 
               for (const a of allA) {
                 const href = (a.href || '').trim();
                 const text = (a.innerText || '').trim().toLowerCase();
-                if (!href || href.startsWith('javascript:') || href.includes('hiredoor.in') || href.includes('whatsapp') || href.includes('linkedin') || href.includes('telegram') || href.includes('alloteme')) {
+                if (!href || href.startsWith('javascript:') || href.includes('hiredoor.in') || href.includes('whatsapp.com/channel') || href.includes('linkedin.com/company') || href.includes('alloteme')) {
                   continue;
                 }
 
@@ -1511,19 +1513,29 @@ exports.syncHireDoor = async (req, res) => {
 
                 const lowHref = href.toLowerCase();
                 const isATS = atsPatterns.some(p => lowHref.includes(p));
-                const isApplyText = /apply|submit application|view job/i.test(text);
+                const isApplyText = /apply|submit application|view job|form/i.test(text);
 
                 if (isATS || isApplyText) {
                   return href;
                 }
               }
 
-              // 2. Look inside "How to Apply" section
+              // 2. Scan text for Google Forms (e.g. "Apply here: https://forms.gle/..." or "docs.google.com/forms/...")
+              const gFormText = bodyText.match(/https?:\/\/(?:docs\.google\.com\/forms\/d\/[^\s"'>)]+|forms\.gle\/[a-zA-Z0-9_-]+)/i);
+              if (gFormText) {
+                return gFormText[0];
+              }
+
+              // 3. Scan "How to Apply" section
               const headings = Array.from(document.querySelectorAll('h2, h3, h4, div, span'));
               const howToApplyHeading = headings.find(h => /how to apply/i.test(h.innerText));
               if (howToApplyHeading) {
                 const parent = howToApplyHeading.closest('div, section') || howToApplyHeading.parentElement;
                 if (parent) {
+                  const sectionText = parent.innerText;
+                  const gFormInSection = sectionText.match(/https?:\/\/(?:docs\.google\.com\/forms\/d\/[^\s"'>)]+|forms\.gle\/[a-zA-Z0-9_-]+)/i);
+                  if (gFormInSection) return gFormInSection[0];
+
                   const linksInSection = Array.from(parent.querySelectorAll('a[href]'))
                     .map(a => a.href)
                     .filter(h => h && !h.includes('hiredoor.in') && !h.includes('whatsapp') && !h.includes('linkedin'));
@@ -1531,11 +1543,36 @@ exports.syncHireDoor = async (req, res) => {
                 }
               }
 
+              // 4. Scan page HTML for unlinked Google Forms (e.g. embedded in React/Next.js state or job payload)
+              const gFormHtml = html.match(/https?:\/\/(?:docs\.google\.com\/forms\/d\/e\/[a-zA-Z0-9_-]+\/viewform|forms\.gle\/[a-zA-Z0-9_-]+)/i);
+              if (gFormHtml) {
+                const cleanFound = gFormHtml[0].replace(/\\u0026/g, '&').replace(/\\\//g, '/').replace(/[\"'\\]+$/, '');
+                // Exclude any HireDoor internal feedback/report forms
+                if (!cleanFound.includes('1FAIpQLSfQWc_lv_mvwR3mbksJyjCTUjiOgEFjty8N36em97v2diOP_w')) {
+                  return cleanFound;
+                }
+              }
+
               return null;
             });
 
-            if (pageJobLink) externalApplyUrl = pageJobLink;
+            if (pageJobLink) {
+              externalApplyUrl = pageJobLink;
+            }
           } catch (e) {}
+        }
+
+        // Clean any residual trailing backslashes, quotes, or URI-encoding from externalApplyUrl
+        if (externalApplyUrl && typeof externalApplyUrl === 'string') {
+          externalApplyUrl = externalApplyUrl
+            .trim()
+            .replace(/[\"'\\]+$/, '')
+            .replace(/\\u0026/g, '&')
+            .replace(/\\\//g, '/');
+
+          if (/docs\.google\.com\/forms|forms\.gle/i.test(externalApplyUrl)) {
+            logScraper(`[Google Form Detected] Captured direct Google Form apply link: ${externalApplyUrl}`, 'success');
+          }
         }
 
         // Apply link resolution: ONLY genuine external company apply URL, company mailto, or employer contact number. NEVER hiredoor.in!
