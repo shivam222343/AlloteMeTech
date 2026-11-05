@@ -17,32 +17,51 @@ const MainLayout = () => {
     };
   }, []);
 
+  // Landing marketing page: Free-flowing full-width layout
+  if (isLandingPage) {
+    return (
+      <div className="min-h-screen flex flex-col bg-bg-primary">
+        <Navbar onToggleSidebar={() => setSidebarOpen((o) => !o)} />
+        <AppSidebar
+          isMobileDrawer={true}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+        <main className="flex-1">
+          <Outlet />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // All user app routes (/discussion, /jobs, /companies, /topics, /dashboard, /profile, etc.):
+  // Full-page height layout with 100% full-height permanent sidebar pinned from top to bottom
   return (
-    <div className="min-h-screen flex flex-col bg-bg-primary">
+    <div className="flex flex-col h-screen overflow-hidden bg-bg-primary">
       <Navbar onToggleSidebar={() => setSidebarOpen((o) => !o)} />
 
-      {/* Mobile Drawer with BranchedMenu */}
-      <AppSidebar
-        isMobileDrawer={true}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
+      {/* Main App Body */}
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Full Page Height Desktop Sidebar */}
+        <AppSidebar
+          isMobileDrawer={false}
+          className="hidden md:flex h-full min-h-full"
+        />
 
-      <div className="flex flex-1 min-w-0">
-        {/* Desktop Sidebar with BranchedMenu shown for user navlinks */}
-        {!isLandingPage && (
-          <AppSidebar
-            isMobileDrawer={false}
-            className="hidden md:flex sticky top-16 h-[calc(100vh-4rem)]"
-          />
-        )}
+        {/* Mobile Drawer */}
+        <AppSidebar
+          isMobileDrawer={true}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <main className="flex-1 min-w-0">
+        {/* Content Viewport with independent smooth scrolling */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+          <main className="flex-1 overflow-y-auto min-w-0 admin-scroll">
             <Outlet />
+            <Footer />
           </main>
-          <Footer />
         </div>
       </div>
     </div>

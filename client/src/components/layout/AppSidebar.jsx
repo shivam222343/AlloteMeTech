@@ -103,7 +103,7 @@ export default function AppSidebar({ isOpen, onClose, isMobileDrawer = false, cl
 
   // Sidebar inner content (No logo and No title part in sidebar — logo/title are exclusively in Navbar)
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-bg-card text-text-primary select-none">
+    <div className="flex flex-col h-full min-h-full bg-bg-card text-text-primary select-none">
       {/* Mobile drawer header with clean close button */}
       {isMobileDrawer && (
         <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-shrink-0 bg-bg-card/60">
@@ -156,8 +156,8 @@ export default function AppSidebar({ isOpen, onClose, isMobileDrawer = false, cl
         />
       </div>
 
-      {/* Bottom User Profile Section */}
-      <div className="p-3 border-t border-border bg-bg-card/80 flex-shrink-0">
+      {/* Bottom User Profile Section pinned to the bottom */}
+      <div className="p-3 border-t border-border bg-bg-card/80 flex-shrink-0 mt-auto">
         {user ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2.5 p-1.5 rounded-lg bg-bg-secondary/60 border border-border/50">
@@ -245,7 +245,7 @@ export default function AppSidebar({ isOpen, onClose, isMobileDrawer = false, cl
 
   // Desktop Static Sidebar
   return (
-    <aside className={`w-60 flex-shrink-0 border-r border-border bg-bg-card hidden md:flex flex-col h-full ${className}`}>
+    <aside className={`w-60 flex-shrink-0 border-r border-border bg-bg-card hidden md:flex flex-col h-full min-h-full ${className}`}>
       {sidebarContent}
     </aside>
   );
