@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Shield,
   Briefcase,
@@ -10,8 +10,6 @@ import {
   User as UserIcon,
   X,
   LogOut,
-  ChevronRight,
-  ExternalLink,
 } from 'lucide-react';
 import {
   Rocket01Icon,
@@ -27,6 +25,7 @@ import BranchedMenu from '../common/BranchedMenu';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { getInitials } from '../../utils/helpers';
+import { Link } from 'react-router-dom';
 
 export default function AppSidebar({ isOpen, onClose, isMobileDrawer = false, className = '' }) {
   const { user, isAdmin, logout } = useAuth();
@@ -35,61 +34,55 @@ export default function AppSidebar({ isOpen, onClose, isMobileDrawer = false, cl
   const location = useLocation();
 
   const currentPath = location.pathname;
+  const isAdminRoute = currentPath.startsWith('/admin');
 
-  // Build role-specific menu items
-  const adminMenuItems = [
-    {
-      label: 'Admin Control',
-      children: [
-        { value: '/admin', label: 'Dashboard', icon: Rocket01Icon },
-        { value: '/admin/jobs', label: 'Jobs Management', icon: Layers01Icon },
-        { value: '/admin/users', label: 'Users Management', icon: CursorPointer01Icon },
-        { value: '/admin/companies', label: 'Companies', icon: Download04Icon },
-        { value: '/admin/problems', label: 'Problems', icon: PaintBoardIcon },
-        { value: '/admin/topics', label: 'Topics', icon: TextFontIcon },
-        { value: '/admin/analytics', label: 'Analytics', icon: Notification03Icon },
-        { value: '/admin/pricing', label: 'Pricing & Coupons', icon: Settings02Icon },
-      ]
-    },
-    {
-      label: 'Platform & Career',
-      children: [
-        { value: '/jobs', label: 'Browse Jobs', icon: Briefcase },
-        { value: '/companies', label: 'Companies Directory', icon: Building2 },
-        { value: '/topics', label: 'Practice Topics', icon: Tag },
-        { value: '/discussion', label: 'Forum Discussion', icon: MessageSquare },
-      ]
-    },
-    {
-      label: 'Account & Workspace',
-      children: [
-        { value: '/dashboard', label: 'User Dashboard', icon: LayoutDashboard },
-        { value: '/profile', label: 'My Profile', icon: UserIcon },
-      ]
+  // Navigation sections
+  const platformSection = {
+    label: 'Platform & Career',
+    children: [
+      { value: '/jobs', label: 'Explore Jobs', icon: Briefcase },
+      { value: '/companies', label: 'Companies Directory', icon: Building2 },
+      { value: '/topics', label: 'Practice Topics', icon: Tag },
+      { value: '/discussion', label: 'Community Forum', icon: MessageSquare },
+    ]
+  };
+
+  const workspaceSection = {
+    label: 'Personal Workspace',
+    children: [
+      { value: '/dashboard', label: 'My Dashboard', icon: LayoutDashboard },
+      { value: '/profile', label: 'My Profile', icon: UserIcon },
+    ]
+  };
+
+  const adminSection = {
+    label: 'Admin Control',
+    children: [
+      { value: '/admin', label: 'Dashboard', icon: Rocket01Icon },
+      { value: '/admin/jobs', label: 'Jobs Management', icon: Layers01Icon },
+      { value: '/admin/users', label: 'Users Management', icon: CursorPointer01Icon },
+      { value: '/admin/companies', label: 'Companies', icon: Download04Icon },
+      { value: '/admin/problems', label: 'Problems', icon: PaintBoardIcon },
+      { value: '/admin/topics', label: 'Topics', icon: TextFontIcon },
+      { value: '/admin/analytics', label: 'Analytics', icon: Notification03Icon },
+      { value: '/admin/pricing', label: 'Pricing & Coupons', icon: Settings02Icon },
+    ]
+  };
+
+  // Build role-specific menu items dynamically
+  let menuItems = [];
+  if (isAdmin) {
+    if (isAdminRoute) {
+      // When inside /admin, put Admin Control on top
+      menuItems = [adminSection, platformSection, workspaceSection];
+    } else {
+      // When browsing user navlinks, put Platform & Career on top, then Workspace, then Admin Control
+      menuItems = [platformSection, workspaceSection, adminSection];
     }
-  ];
-
-  const userMenuItems = [
-    {
-      label: 'Platform & Career',
-      children: [
-        { value: '/jobs', label: 'Explore Jobs', icon: Briefcase },
-        { value: '/companies', label: 'Companies Directory', icon: Building2 },
-        { value: '/topics', label: 'Practice Topics', icon: Tag },
-        { value: '/discussion', label: 'Forum Discussion', icon: MessageSquare },
-      ]
-    },
-    {
-      label: 'Personal Workspace',
-      children: [
-        { value: '/dashboard', label: 'My Dashboard', icon: LayoutDashboard },
-        { value: '/profile', label: 'My Profile', icon: UserIcon },
-        ...(isAdmin ? [{ value: '/admin', label: 'Admin Console', icon: Rocket01Icon }] : [])
-      ]
-    }
-  ];
-
-  const menuItems = isAdmin ? adminMenuItems : userMenuItems;
+  } else {
+    // Non-admin / regular user
+    menuItems = [platformSection, workspaceSection];
+  }
 
   const handleSelect = (value) => {
     navigate(value);
@@ -108,32 +101,15 @@ export default function AppSidebar({ isOpen, onClose, isMobileDrawer = false, cl
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isMobileDrawer, isOpen, onClose]);
 
-  // Sidebar inner content
+  // Sidebar inner content (No logo and No title part in sidebar — logo/title are exclusively in Navbar)
   const sidebarContent = (
     <div className="flex flex-col h-full bg-bg-card text-text-primary select-none">
-      {/* Brand Header */}
-      <div className="px-4 py-3.5 border-b border-border flex items-center justify-between flex-shrink-0 bg-bg-card/50">
-        <Link
-          to="/"
-          onClick={() => isMobileDrawer && onClose?.()}
-          className="flex items-center gap-2.5 group"
-        >
-          <img
-            src={isDark ? "/AlloteMe_Logos.png" : "/AlloteMe_Logos _Light.png"}
-            alt="AlloteMe"
-            className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
-          />
-          <div className="flex flex-col">
-            <span className="text-xs font-bold text-text-primary leading-tight">
-              {isAdmin ? 'Admin Console' : 'Tech AlloteMe'}
-            </span>
-            <span className="text-[10px] text-text-muted">
-              {isAdmin ? 'Platform Management' : 'Career & Prep Hub'}
-            </span>
-          </div>
-        </Link>
-
-        {isMobileDrawer && (
+      {/* Mobile drawer header with clean close button */}
+      {isMobileDrawer && (
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-shrink-0 bg-bg-card/60">
+          <span className="text-xs font-semibold uppercase tracking-wider text-text-faint">
+            Navigation Menu
+          </span>
           <button
             type="button"
             onClick={onClose}
@@ -142,23 +118,23 @@ export default function AppSidebar({ isOpen, onClose, isMobileDrawer = false, cl
           >
             <X className="w-4 h-4" />
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Role Pill indicator */}
-      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint">
-          {isAdmin ? 'Administrator' : 'Navigation'}
-        </span>
-        {isAdmin && (
-          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-accent-blue/15 text-accent-blue font-semibold border border-accent-blue/30">
-            <Shield className="w-2.5 h-2.5" /> Admin Mode
+      {/* Subtle top indicator for desktop */}
+      {!isMobileDrawer && isAdmin && (
+        <div className="px-4 pt-3 pb-1 flex items-center justify-between flex-shrink-0">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-text-faint">
+            {isAdminRoute ? 'Admin View' : 'User View'}
           </span>
-        )}
-      </div>
+          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-accent-blue/15 text-accent-blue font-semibold border border-accent-blue/30">
+            <Shield className="w-2.5 h-2.5" /> Admin
+          </span>
+        </div>
+      )}
 
       {/* Main Branched Navigation Menu */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 admin-scroll">
+      <div className="flex-1 overflow-y-auto px-3 py-3 admin-scroll">
         <BranchedMenu
           items={menuItems}
           defaultOpen={[0, 1]}
@@ -274,4 +250,3 @@ export default function AppSidebar({ isOpen, onClose, isMobileDrawer = false, cl
     </aside>
   );
 }
-
