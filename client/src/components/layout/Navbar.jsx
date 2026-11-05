@@ -17,7 +17,7 @@ const navLinks = [
   { to: '/discussion', label: 'Forum' },
 ];
 
-const Navbar = () => {
+const Navbar = ({ onToggleSidebar }) => {
   const { user, logout, isAdmin } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -162,40 +162,24 @@ const Navbar = () => {
               </div>
             )}
 
-            {/* Mobile menu toggle */}
+            {/* Mobile menu / sidebar toggle */}
             <button
               className="md:hidden btn-icon btn-ghost"
               onClick={() => {
-                if (isAdminRoute) {
+                if (onToggleSidebar) {
+                  onToggleSidebar();
+                } else if (isAdminRoute) {
                   window.dispatchEvent(new CustomEvent('toggle-admin-sidebar'));
                 } else {
-                  setMobileOpen((o) => !o);
+                  window.dispatchEvent(new CustomEvent('toggle-app-sidebar'));
                 }
               }}
-              aria-label="Toggle menu"
+              aria-label="Toggle navigation menu"
             >
-              {isAdminRoute ? (
-                <Menu className="w-5 h-5" />
-              ) : (
-                mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />
-              )}
+              <Menu className="w-5 h-5" />
             </button>
           </div>
         </div>
-
-        {/* Mobile Nav */}
-        {mobileOpen && !isAdminRoute && (
-          <div className="md:hidden border-t border-border py-3 space-y-1 animate-slide-down">
-            <div className="mb-3"><GlobalSearch /></div>
-            {navLinks.map(({ to, label }) => (
-              <NavLink key={to} to={to} onClick={() => setMobileOpen(false)}
-                className={({ isActive }) =>
-                  `block px-3 py-2 rounded text-sm transition-colors ${isActive ? 'text-text-primary bg-bg-secondary' : 'text-text-muted hover:text-text-primary'}`
-                }
-              >{label}</NavLink>
-            ))}
-          </div>
-        )}
       </div>
     </header>
   );

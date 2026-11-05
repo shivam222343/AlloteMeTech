@@ -29,17 +29,39 @@ const AdminUsers = () => {
     onSuccess: () => { toast.success('User deleted'); qc.invalidateQueries({ queryKey: ['admin-users'] }); },
   });
 
-  const users = data?.data?.data || [];
+  const rawUsers = data?.data?.data || [];
   const pagination = data?.data?.pagination;
+
+  // Prioritize online users and most recent active users on top
+  const users = [...rawUsers].sort((a, b) => {
+    const isAOnline = formatLastActive(a.lastActivityDate) === 'Online';
+    const isBOnline = formatLastActive(b.lastActivityDate) === 'Online';
+    if (isAOnline && !isBOnline) return -1;
+    if (!isAOnline && isBOnline) return 1;
+    const timeA = a.lastActivityDate ? new Date(a.lastActivityDate).getTime() : 0;
+    const timeB = b.lastActivityDate ? new Date(b.lastActivityDate).getTime() : 0;
+    if (timeA !== timeB) return timeB - timeA;
+    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+  });
+
+  const onlineCount = rawUsers.filter((u) => formatLastActive(u.lastActivityDate) === 'Online').length;
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-text-primary">Users</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold text-text-primary">Users</h1>
+          {onlineCount > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent-green/10 text-accent-green border border-accent-green/20 text-xs font-semibold animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-accent-green" />
+              {onlineCount} Online Now
+            </span>
+          )}
+        </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-faint pointer-events-none" />
           <input type="text" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search users..." className="input pl-9 text-sm w-56" id="admin-user-search" />
+            placeholder="Search users..." className="input pl-9 text-sm w-full sm:w-56" id="admin-user-search" />
         </div>
       </div>
 

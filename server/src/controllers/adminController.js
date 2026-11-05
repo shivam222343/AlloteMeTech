@@ -26,7 +26,12 @@ exports.getUsers = async (req, res) => {
 
   const skip = (page - 1) * limit;
   const [users, total] = await Promise.all([
-    User.find(query).select('-password -refreshToken').sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+    User.find(query)
+      .select('-password -refreshToken')
+      .sort({ lastActivityDate: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .lean(),
     User.countDocuments(query),
   ]);
   return ApiResponse.paginated(res, users, { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / limit) });

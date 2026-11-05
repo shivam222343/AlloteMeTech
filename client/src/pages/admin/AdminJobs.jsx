@@ -1047,16 +1047,16 @@ function ManageJobsTab() {
       />
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
         <input
-          className="input text-sm py-1.5 flex-1 max-w-xs"
+          className="input text-sm py-1.5 w-full sm:w-60 flex-shrink-0"
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
           placeholder="Search jobs..."
         />
 
         {/* Category Classification Filter Tabs */}
-        <div className="flex items-center gap-1 bg-bg-secondary p-1 rounded-lg border border-border">
+        <div className="flex items-center gap-1 bg-bg-secondary p-1 rounded-lg border border-border overflow-x-auto no-scrollbar flex-shrink-0">
           {[
             { id: 'all', label: 'All Categories' },
             { id: 'Tech', label: '💻 Tech' },
@@ -1066,7 +1066,7 @@ function ManageJobsTab() {
               key={cat.id}
               type="button"
               onClick={() => { setCategoryFilter(cat.id); setPage(1); }}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+              className={`px-3 py-1 text-xs font-semibold rounded-md whitespace-nowrap transition-all ${
                 categoryFilter === cat.id
                   ? 'bg-accent-blue text-white shadow-sm'
                   : 'text-text-muted hover:text-text-primary'
@@ -1077,12 +1077,12 @@ function ManageJobsTab() {
           ))}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-between sm:justify-end sm:ml-auto flex-wrap">
           {/* Live Terminal toggle button */}
           <button
             type="button"
             onClick={() => setTerminalOpen(true)}
-            className="btn btn-ghost btn-sm flex items-center gap-1.5 font-mono text-xs border border-border"
+            className="btn btn-ghost btn-sm flex items-center gap-1.5 font-mono text-xs border border-border flex-shrink-0"
             title="Open live scraping terminal"
           >
             <Terminal className="w-3.5 h-3.5 text-accent-green" />
@@ -1091,7 +1091,7 @@ function ManageJobsTab() {
           </button>
 
           {syncing ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <span className="flex items-center gap-1.5 text-accent-blue font-semibold text-xs py-1.5 px-3 rounded-lg bg-accent-blue/10 border border-accent-blue/20">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" /> Syncing...
               </span>
@@ -1108,7 +1108,7 @@ function ManageJobsTab() {
           ) : (
             <button
               onClick={() => setSyncModalOpen(true)}
-              className="btn btn-primary btn-sm flex items-center gap-1.5"
+              className="btn btn-primary btn-sm flex items-center gap-1.5 flex-shrink-0"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Sync HireDoor
@@ -1544,7 +1544,7 @@ function ManageJobsTab() {
           {jobs.map(job => (
             <div
               key={job._id}
-              className={`card px-4 py-3 flex items-start gap-3 transition-colors ${
+              className={`card px-3 sm:px-4 py-3 flex items-start gap-2.5 sm:gap-3 transition-colors min-w-0 ${
                 selectedIds.has(job._id) ? 'border-[#25D366]/40 bg-[#25D366]/5' : ''
               }`}
             >
@@ -1553,32 +1553,32 @@ function ManageJobsTab() {
                 type="checkbox"
                 checked={selectedIds.has(job._id)}
                 onChange={() => toggleSelect(job._id)}
-                className="mt-1 w-4 h-4 rounded border-border text-accent-blue cursor-pointer"
+                className="mt-1 w-4 h-4 rounded border-border text-accent-blue cursor-pointer flex-shrink-0"
               />
 
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-text-primary truncate">{job.title}</span>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-text-primary leading-snug break-words">{job.title}</span>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
                     job.category === 'Non-Tech'
                       ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
                       : 'bg-accent-blue/10 text-accent-blue border-accent-blue/30'
                   }`}>
                     {job.category === 'Non-Tech' ? '💼 Non-Tech' : '💻 Tech'}
                   </span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${SOURCE_BADGE[job.source] || SOURCE_BADGE.manual}`}>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap ${SOURCE_BADGE[job.source] || SOURCE_BADGE.manual}`}>
                     {job.source}
                   </span>
                   {!job.isActive && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-accent-red/10 text-accent-red">inactive</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-accent-red/10 text-accent-red whitespace-nowrap">inactive</span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 flex-wrap text-xs text-text-faint mt-0.5">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs text-text-faint mt-1">
                   <span>{job.companyName || job.companyTag || '—'} · {job.jobType} · {job.workMode}</span>
-                  {job.salary && <span>· {job.salary}</span>}
+                  {job.salary && <span className="font-medium text-accent-green">· {job.salary}</span>}
                   {(job.scrapedAt || (job.source === 'scraped' && job.createdAt)) && (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-accent-blue bg-accent-blue/5 border border-accent-blue/20 px-1.5 py-0.5 rounded font-medium">
-                      <Clock className="w-3 h-3 text-accent-blue" />
+                    <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-accent-blue bg-accent-blue/5 border border-accent-blue/20 px-1.5 py-0.5 rounded font-medium">
+                      <Clock className="w-2.5 h-2.5 text-accent-blue" />
                       Scraped: {new Date(job.scrapedAt || job.createdAt).toLocaleString('en-IN', {
                         day: 'numeric',
                         month: 'short',
@@ -1589,17 +1589,17 @@ function ManageJobsTab() {
                   )}
                 </div>
                 {job.applyEmail && (
-                  <p className="text-xs text-accent-blue mt-0.5 flex items-center gap-1">
-                    <Mail className="w-3 h-3" /> {job.applyEmail}
+                  <p className="text-xs text-accent-blue mt-1 flex items-center gap-1 break-all">
+                    <Mail className="w-3 h-3 flex-shrink-0" /> {job.applyEmail}
                   </p>
                 )}
                 {job.contactPhone && (
                   <p className="text-xs text-accent-green mt-0.5 flex items-center gap-1">
-                    <Phone className="w-3 h-3" /> {job.contactPhone}
+                    <Phone className="w-3 h-3 flex-shrink-0" /> {job.contactPhone}
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 self-start">
                 {/* Single WhatsApp Share */}
                 <button
                   type="button"
@@ -2129,16 +2129,16 @@ export default function AdminJobs() {
   ];
 
   return (
-    <div className="max-w-4xl">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-text-primary">Jobs Management</h1>
-          <p className="text-text-muted text-sm mt-0.5">Post and manage job listings — Multi-page HireDoor scraper, WhatsApp sharing &amp; settings</p>
+    <div className="max-w-5xl w-full min-w-0 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-text-primary tracking-tight">Jobs Management</h1>
+          <p className="text-text-muted text-xs sm:text-sm mt-0.5">Post and manage job listings — Multi-page HireDoor scraper, WhatsApp sharing &amp; settings</p>
         </div>
 
         <button
           onClick={() => setSettingsModalOpen(true)}
-          className="btn btn-ghost btn-sm flex items-center gap-2 border border-border bg-bg-card hover:border-accent-blue/50"
+          className="btn btn-ghost btn-sm flex items-center gap-2 border border-border bg-bg-card hover:border-accent-blue/50 self-start sm:self-auto flex-shrink-0"
           title="Configure Groq AI Key and HireDoor Scraper Credentials"
         >
           <Key className="w-3.5 h-3.5 text-accent-yellow" />
@@ -2152,18 +2152,18 @@ export default function AdminJobs() {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-bg-secondary rounded-lg mb-6 w-fit">
+      {/* Responsive Horizontal Tabs */}
+      <div className="flex gap-1 p-1 bg-bg-secondary rounded-lg mb-6 max-w-full overflow-x-auto no-scrollbar scroll-smooth">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
               activeTab === id ? 'bg-bg-card text-text-primary shadow-sm' : 'text-text-muted hover:text-text-primary'
             }`}
           >
-            <Icon className="w-3.5 h-3.5" />
-            {label}
+            <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>{label}</span>
           </button>
         ))}
       </div>
