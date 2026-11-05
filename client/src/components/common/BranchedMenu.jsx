@@ -39,11 +39,14 @@ const MARK = 16;
 const renderIcon = (icon) => {
   if (!icon) return null;
   if (isValidElement(icon)) return icon;
-  if (typeof icon === 'function') {
+  if (typeof icon === 'function' || (typeof icon === 'object' && (icon?.$$typeof || icon?.render))) {
     const IconComp = icon;
     return <IconComp size={16} className="w-4 h-4 flex-shrink-0" strokeWidth={1.8} />;
   }
-  return <HugeiconsIcon icon={icon} size={16} strokeWidth={1.8} />;
+  if (Array.isArray(icon)) {
+    return <HugeiconsIcon icon={icon} size={16} strokeWidth={1.8} />;
+  }
+  return null;
 };
 
 const toSet = (open) => new Set(Array.isArray(open) ? open : open >= 0 ? [open] : []);
@@ -242,3 +245,4 @@ export default function BranchedMenu({
     </nav>
   );
 }
+

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { MapPin, Briefcase, Calendar, Users, ExternalLink, ArrowLeft, CheckCircle2, Banknote, Mail, Phone, Lock } from 'lucide-react';
@@ -31,11 +32,21 @@ export default function JobDetail() {
     </div>
   );
 
+  const [imgError, setImgError] = useState(false);
+
+  const isValidCompanyLogo = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    const clean = url.trim().toLowerCase();
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) return false;
+    return !/google\.com\/s2\/favicons|bing\.com|linkedin|instagram|whatsapp|facebook|twitter|youtube|googleusercontent|avatar|og-image|open%20graph|landingpage/i.test(clean);
+  };
+
   // Priority 1: First use uploaded company logo (from Company document)
   // Priority 2: If not available, use scraped logo (job.companyLogo)
-  const companyLogo = (job.company?.logo && job.company.logo.trim())
+  const rawLogo = (job.company?.logo && job.company.logo.trim())
     ? job.company.logo
     : (job.companyLogo || '');
+  const companyLogo = isValidCompanyLogo(rawLogo) ? rawLogo : '';
   const companyName = job.company?.name || job.companyName;
   const rawApplyLink = (job.applyLink || '').trim();
   const hasDirectCompanyLink = rawApplyLink && !rawApplyLink.toLowerCase().includes('hiredoor') && !rawApplyLink.startsWith('mailto:');
@@ -64,11 +75,18 @@ export default function JobDetail() {
       {/* Hero Card */}
       <div className="card p-6 mb-6">
         <div className="flex items-start gap-4 mb-4">
-          <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-bg-secondary border border-border flex items-center justify-center">
-            {companyLogo ? (
-              <img src={companyLogo} alt={companyName} className={`w-full h-full object-contain ${job.company?.hasWhiteBg ? 'bg-white' : ''}`} />
+          <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center p-1.5">
+            {companyLogo && !imgError ? (
+              <img
+                src={companyLogo}
+                alt={companyName}
+                onError={() => setImgError(true)}
+                className={`w-full h-full object-contain ${job.company?.hasWhiteBg ? 'bg-white' : ''}`}
+              />
             ) : (
-              <span className="text-2xl font-bold text-text-faint">{companyName?.charAt(0)}</span>
+              <span className="text-2xl font-bold text-accent-blue select-none">
+                {(companyName?.trim()?.charAt(0) || 'C').toUpperCase()}
+              </span>
             )}
           </div>
           <div className="flex-1">

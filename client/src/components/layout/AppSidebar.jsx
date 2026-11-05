@@ -274,3 +274,4 @@ export default function AppSidebar({ isOpen, onClose, isMobileDrawer = false, cl
     </aside>
   );
 }
+

@@ -207,6 +207,37 @@ exports.adminGetJobs = async (req, res) => {
   });
 };
 
+// ── Helper: validate genuine company logo URL ─────────────────────────────────
+function isValidCompanyLogo(url) {
+  if (!url || typeof url !== 'string') return false;
+  const clean = url.trim().toLowerCase();
+  if (!clean.startsWith('http://') && !clean.startsWith('https://')) return false;
+
+  // Disallow third-party favicon fetchers, search engines, social networks, Google avatars, and generic banners
+  const blockedPatterns = [
+    'google.com/s2/favicons',
+    'bing.com',
+    'linkedin',
+    'instagram',
+    'whatsapp',
+    'facebook',
+    'twitter',
+    'youtube',
+    'googleusercontent',
+    'avatar',
+    'og-image',
+    'open%20graph',
+    'landingpage',
+    'banner',
+  ];
+
+  if (blockedPatterns.some((pattern) => clean.includes(pattern))) {
+    return false;
+  }
+
+  return true;
+}
+
 // ── Helper: resolve company from tag ─────────────────────────────────────────
 async function resolveCompany(companyTag) {
   if (!companyTag) return { companyId: null, companyName: '', companyLogo: '' };
@@ -220,17 +251,17 @@ async function resolveCompany(companyTag) {
     ],
   });
 
-  if (company && company.logo) {
+  if (company && company.logo && isValidCompanyLogo(company.logo)) {
     return { companyId: company._id, companyName: company.name, companyLogo: company.logo };
   }
 
-  // 2. Check if any existing Job with this companyTag has a logo
+  // 2. Check if any existing Job with this companyTag has a valid verified logo
   const existingJob = await Job.findOne({
     companyTag: { $in: [cleanTag, companyTag.toLowerCase().trim()] },
     companyLogo: { $exists: true, $ne: '' },
   }).select('companyLogo companyName company');
 
-  if (existingJob?.companyLogo) {
+  if (existingJob?.companyLogo && isValidCompanyLogo(existingJob.companyLogo)) {
     return {
       companyId: company?._id || existingJob.company || null,
       companyName: company?.name || existingJob.companyName || companyTag,
@@ -241,7 +272,7 @@ async function resolveCompany(companyTag) {
   return {
     companyId: company?._id || null,
     companyName: company?.name || companyTag,
-    companyLogo: company?.logo || '',
+    companyLogo: (company?.logo && isValidCompanyLogo(company.logo)) ? company.logo : '',
   };
 }
 
@@ -1339,12 +1370,23 @@ exports.syncHireDoor = async (req, res) => {
           const companyEl = document.querySelector('h1')?.previousElementSibling || document.querySelector('a[href*="/companies/"]');
           const companyName = companyEl ? companyEl.innerText.trim() : '';
 
-          // Find company logo (ignore hiredoor main logo)
-          const allImgs = Array.from(document.querySelectorAll('img'));
-          const logoImg = allImgs.find(img => 
-            img.src && !img.src.includes('hiredoor-logo') && (img.src.includes('companies') || img.src.includes('logo') || (img.alt && img.alt.toLowerCase().includes('logo')))
-          );
-          const companyLogo = logoImg ? logoImg.src : '';
+          // Find company logo strictly within the job's header section.
+          // Never grab unrelated images from other sections, recommendation carousels, or social icons.
+          let companyLogo = '';
+          const headerContainer = document.querySelector('h1')?.closest('header, section, div.grid, div.flex, div[class*="header"], div[class*="hero"], div[class*="banner"]') || document.querySelector('h1')?.parentElement?.parentElement;
+
+          if (headerContainer) {
+            const headerImgs = Array.from(headerContainer.querySelectorAll('img'));
+            const logoImg = headerImgs.find(img => {
+              const src = (img.src || '').toLowerCase();
+              const alt = (img.alt || '').toLowerCase();
+              if (!src || src.startsWith('data:')) return false;
+              if (src.includes('hiredoor-logo') || src.includes('hiredoor_logo') || src.includes('googleusercontent') || src.includes('avatar')) return false;
+              if (/linkedin|instagram|whatsapp|facebook|twitter|youtube|discord|telegram/.test(src) || /linkedin|instagram|whatsapp|facebook|twitter|youtube|discord|telegram/.test(alt)) return false;
+              return src.includes('/companies/') || src.includes('/company/') || src.includes('/employers/') || alt.includes('logo') || src.includes('logo');
+            });
+            if (logoImg) companyLogo = logoImg.src;
+          }
 
           const bodyText = document.body.innerText;
 
@@ -1609,8 +1651,9 @@ exports.syncHireDoor = async (req, res) => {
         const { companyId, companyName, companyLogo: resolvedLogo } = await resolveCompany(companyTag);
 
         // Priority 1: First use uploaded company logo (from Company collection)
-        // Priority 2: If not available, use scraped logo from HireDoor
-        const finalCompanyLogo = resolvedLogo || jobData.companyLogo || '';
+        // Priority 2: If not available, use verified scraped logo from HireDoor
+        const candidateLogo = resolvedLogo || jobData.companyLogo || '';
+        const finalCompanyLogo = isValidCompanyLogo(candidateLogo) ? candidateLogo : '';
 
         // Clean and brand all scraped text fields: replace any HireDoor mention with Tech AlloteMe
         const cleanTitle = replaceHiredoorWithAlloteme(jobData.title) || 'Open Position';

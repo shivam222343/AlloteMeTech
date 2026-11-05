@@ -1,7 +1,15 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Banknote, ExternalLink, Mail, Phone, Lock } from 'lucide-react';
 import { WhatsAppIcon, formatJobForWhatsApp, shareOnWhatsApp, formatTimeAgo } from './whatsappHelper';
 import { useJobApply } from './useJobApply';
+
+const isValidCompanyLogo = (url) => {
+  if (!url || typeof url !== 'string') return false;
+  const clean = url.trim().toLowerCase();
+  if (!clean.startsWith('http://') && !clean.startsWith('https://')) return false;
+  return !/google\.com\/s2\/favicons|bing\.com|linkedin|instagram|whatsapp|facebook|twitter|youtube|googleusercontent|avatar|og-image|open%20graph|landingpage/i.test(clean);
+};
 
 const TYPE_COLORS = {
   'Full-time': 'text-accent-green bg-accent-green/10',
@@ -24,12 +32,15 @@ export default function JobCard({
   onToggleSelect,
 }) {
   const { user, hasReachedLimit, handleApply } = useJobApply();
+  const [imgError, setImgError] = useState(false);
 
   // Priority 1: Uploaded company logo (from Company document)
   // Priority 2: Scraped company logo (job.companyLogo)
-  const companyLogo = (job.company?.logo && job.company.logo.trim())
+  const rawLogo = (job.company?.logo && job.company.logo.trim())
     ? job.company.logo
     : (job.companyLogo || '');
+
+  const companyLogo = isValidCompanyLogo(rawLogo) ? rawLogo : '';
 
   const companyName = job.company?.name || job.companyName || 'Unknown Company';
   const slug = job.slug;
@@ -68,16 +79,17 @@ export default function JobCard({
             />
           </div>
         )}
-        <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-bg-secondary border border-border flex items-center justify-center p-1">
-          {companyLogo ? (
+        <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center p-1">
+          {companyLogo && !imgError ? (
             <img
               src={companyLogo}
               alt={companyName}
+              onError={() => setImgError(true)}
               className={`w-full h-full object-contain ${job.company?.hasWhiteBg ? 'bg-white' : ''}`}
             />
           ) : (
-            <span className="text-lg font-bold text-text-faint">
-              {companyName.charAt(0).toUpperCase()}
+            <span className="text-base font-bold text-accent-blue select-none">
+              {(companyName?.trim()?.charAt(0) || 'C').toUpperCase()}
             </span>
           )}
         </div>
