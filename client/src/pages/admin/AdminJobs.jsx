@@ -14,6 +14,7 @@ import {
   formatJobForWhatsApp,
   formatMultipleJobsForWhatsApp,
   shareOnWhatsApp,
+  formatTimeAgo,
 } from '../../components/jobs/whatsappHelper';
 
 const formatCompanyName = (job) => {

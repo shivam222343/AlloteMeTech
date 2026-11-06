@@ -64,7 +64,7 @@ export function useJobApply() {
       return;
     }
 
-    const rawApplyLink = (job.applyLink || '').trim();
+    const rawApplyLink = (job.applyLink || job.sourceUrl || '').trim();
     const cleanApplyLink = (rawApplyLink && !rawApplyLink.toLowerCase().includes('hiredoor') && !rawApplyLink.startsWith('mailto:') && !rawApplyLink.startsWith('tel:')) ? rawApplyLink : '';
     const cleanEmail = (job.applyEmail && !job.applyEmail.toLowerCase().includes('hiredoor') && !job.applyEmail.toLowerCase().includes('alloteme'))
       ? job.applyEmail.trim()

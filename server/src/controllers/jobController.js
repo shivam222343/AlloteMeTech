@@ -9,6 +9,50 @@ function generateSlug(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now();
 }
 
+function decodeSerializedJsonString(str) {
+  if (!str) return '';
+  return str
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\\\//g, '/')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\')
+    .trim();
+}
+
+function extractDirectApplyLinkFromHtml(html) {
+  if (!html || typeof html !== 'string') return null;
+
+  // 1. Look for applicationLink in Next.js / React serialized stream:
+  // e.g. \"applicationLink\":\"https://...\" or "applicationLink":"https://..."
+  const appLinkMatch = html.match(/\\*"applicationLink\\*"\s*:\s*\\*"((?:\\.|[^"\\])*?)(?:\\*"|")/i);
+  if (appLinkMatch && appLinkMatch[1]) {
+    const raw = decodeSerializedJsonString(appLinkMatch[1]);
+    if ((raw.startsWith('http://') || raw.startsWith('https://')) && !raw.toLowerCase().includes('hiredoor.in')) {
+      return raw;
+    }
+  }
+
+  // 2. Look for externalUrl / applyUrl / applyLink in stream
+  const altMatch = html.match(/\\*"(?:applyUrl|externalApplyUrl|directApplyUrl|externalUrl)\\*"\s*:\s*\\*"((?:\\.|[^"\\])*?)(?:\\*"|")/i);
+  if (altMatch && altMatch[1]) {
+    const raw = decodeSerializedJsonString(altMatch[1]);
+    if ((raw.startsWith('http://') || raw.startsWith('https://')) && !raw.toLowerCase().includes('hiredoor.in')) {
+      return raw;
+    }
+  }
+
+  // 3. Scan for Google Forms in HTML / stream
+  const gFormMatch = html.match(/https?:\/\/(?:docs\.google\.com\/forms\/d\/[a-zA-Z0-9_\-\/]+|forms\.gle\/[a-zA-Z0-9_\-]+)/i);
+  if (gFormMatch) {
+    const found = decodeSerializedJsonString(gFormMatch[0]);
+    if (!found.includes('1FAIpQLSfQWc_lv_mvwR3mbksJyjCTUjiOgEFjty8N36em97v2diOP_w')) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
 function replaceHiredoorWithAlloteme(val) {
   if (!val) return val;
   if (typeof val === 'string') {
@@ -1482,6 +1526,24 @@ exports.syncHireDoor = async (req, res) => {
         jobPage.setDefaultNavigationTimeout(20000);
         jobPage.setDefaultTimeout(20000);
 
+        // Capture direct applicationLink returned from internal HireDoor API on click
+        let apiApplyUrl = null;
+        const responseHandler = async (res) => {
+          try {
+            if (res.url().includes('/api/apply/')) {
+              const json = await res.json().catch(() => null);
+              if (json && json.applicationLink && typeof json.applicationLink === 'string') {
+                const link = json.applicationLink.trim();
+                if (link && !link.toLowerCase().includes('hiredoor.in')) {
+                  apiApplyUrl = link;
+                  if (!externalApplyUrl) externalApplyUrl = link;
+                }
+              }
+            }
+          } catch (e) {}
+        };
+        jobPage.on('response', responseHandler);
+
         // Hook window.open BEFORE navigation to immediately capture exact apply URLs from React buttons (e.g. keka, lever, greenhouse)
         await jobPage.evaluateOnNewDocument(() => {
           window.__capturedApplyUrl = null;
@@ -1529,6 +1591,14 @@ exports.syncHireDoor = async (req, res) => {
           await jobPage.goto(jobUrl, { waitUntil: 'load', timeout: 12000 }).catch(() => {});
         }
         await sleep(1500);
+
+        // 1. Immediately inspect full HTML/Next.js data payload for direct applicationLink
+        const pageHtml = await jobPage.content().catch(() => '');
+        const payloadApplyUrl = extractDirectApplyLinkFromHtml(pageHtml);
+        if (payloadApplyUrl) {
+          externalApplyUrl = payloadApplyUrl;
+          logScraper(`[Direct Apply Link Found] "${jobUrl}" -> ${payloadApplyUrl}`, 'success');
+        }
 
         // Extract detailed data from the job page
         const jobData = await jobPage.evaluate(() => {
@@ -1660,19 +1730,25 @@ exports.syncHireDoor = async (req, res) => {
           };
         });
 
-        // Click Apply Now button to trigger window.open or target popup
-        await jobPage.evaluate(() => {
-          const btns = Array.from(document.querySelectorAll('button, a')).filter(el => 
-            /apply now|apply for this job/i.test(el.innerText || el.getAttribute('aria-label') || '')
-          );
-          for (const btn of btns) {
-            try {
-              btn.click();
-            } catch (e) {}
-          }
-        });
+        // If not already resolved from page stream payload, click Apply Now button to trigger API / window.open / target
+        if (!externalApplyUrl) {
+          try {
+            const btns = await jobPage.$$('button, a');
+            for (const b of btns) {
+              const text = await (await b.getProperty('innerText')).jsonValue().catch(() => '');
+              if (/apply now|apply for this job/i.test(text || '')) {
+                await b.click().catch(() => {});
+                break;
+              }
+            }
+          } catch (e) {}
 
-        await sleep(2000);
+          await sleep(2500);
+
+          if (apiApplyUrl) {
+            externalApplyUrl = apiApplyUrl;
+          }
+        }
 
         // Check if window.open captured the exact direct ATS apply link
         const hookUrl = await jobPage.evaluate(() => window.__capturedApplyUrl).catch(() => null);
@@ -1685,7 +1761,7 @@ exports.syncHireDoor = async (req, res) => {
               if (cont) cleanHook = decodeURIComponent(cont);
             } catch (e) {}
           }
-          externalApplyUrl = cleanHook;
+          if (!externalApplyUrl) externalApplyUrl = cleanHook;
         }
 
         if (targetListener) {
@@ -1694,19 +1770,19 @@ exports.syncHireDoor = async (req, res) => {
           targetListener = null;
         }
 
-        // If popup was blocked or delayed, check for Google Forms, ATS systems, or application links (NEVER company homepage / "Official website" links)
+        // If popup was blocked or delayed, check for Google Forms or ATS systems (NEVER company homepage / "Official website" links)
         if (!externalApplyUrl || externalApplyUrl.includes('hiredoor.in')) {
           try {
             const pageJobLink = await jobPage.evaluate(() => {
               const allA = Array.from(document.querySelectorAll('a[href]'));
               const bodyText = document.body.innerText || '';
-              const html = document.documentElement.innerHTML || '';
               
-              // 1. First priority: Check all links for Google Forms or ATS portals
+              // Strict ATS and application portal patterns
               const atsPatterns = [
                 'docs.google.com/forms', 'forms.gle', 'forms.office.com', 'typeform.com', 'tally.so',
                 'keka.com', 'greenhouse.io', 'lever.co', 'workday', 'myworkdayjobs', 'darwinbox',
-                'smartrecruiters', 'bamboohr', 'ashbyhq', 'job-boards', 'recruitee', 'taleo', '/apply', '/careers', '/jobs/'
+                'smartrecruiters', 'bamboohr', 'ashbyhq', 'job-boards', 'recruitee', 'taleo',
+                'zohorecruit', 'rippling', 'lever', 'greenhouse'
               ];
 
               for (const a of allA) {
@@ -1723,44 +1799,17 @@ exports.syncHireDoor = async (req, res) => {
 
                 const lowHref = href.toLowerCase();
                 const isATS = atsPatterns.some(p => lowHref.includes(p));
-                const isApplyText = /apply|submit application|view job|form/i.test(text);
+                const hasCareerPath = lowHref.includes('/careers/') || lowHref.includes('/apply/') || lowHref.includes('/jobs/');
 
-                if (isATS || isApplyText) {
+                if (isATS || hasCareerPath) {
                   return href;
                 }
               }
 
-              // 2. Scan text for Google Forms (e.g. "Apply here: https://forms.gle/..." or "docs.google.com/forms/...")
+              // Scan text for direct Google Forms link
               const gFormText = bodyText.match(/https?:\/\/(?:docs\.google\.com\/forms\/d\/[^\s"'>)]+|forms\.gle\/[a-zA-Z0-9_-]+)/i);
-              if (gFormText) {
+              if (gFormText && !gFormText[0].includes('1FAIpQLSfQWc_lv_mvwR3mbksJyjCTUjiOgEFjty8N36em97v2diOP_w')) {
                 return gFormText[0];
-              }
-
-              // 3. Scan "How to Apply" section
-              const headings = Array.from(document.querySelectorAll('h2, h3, h4, div, span'));
-              const howToApplyHeading = headings.find(h => /how to apply/i.test(h.innerText));
-              if (howToApplyHeading) {
-                const parent = howToApplyHeading.closest('div, section') || howToApplyHeading.parentElement;
-                if (parent) {
-                  const sectionText = parent.innerText;
-                  const gFormInSection = sectionText.match(/https?:\/\/(?:docs\.google\.com\/forms\/d\/[^\s"'>)]+|forms\.gle\/[a-zA-Z0-9_-]+)/i);
-                  if (gFormInSection) return gFormInSection[0];
-
-                  const linksInSection = Array.from(parent.querySelectorAll('a[href]'))
-                    .map(a => a.href)
-                    .filter(h => h && !h.includes('hiredoor.in') && !h.includes('whatsapp') && !h.includes('linkedin'));
-                  if (linksInSection.length > 0) return linksInSection[0];
-                }
-              }
-
-              // 4. Scan page HTML for unlinked Google Forms (e.g. embedded in React/Next.js state or job payload)
-              const gFormHtml = html.match(/https?:\/\/(?:docs\.google\.com\/forms\/d\/e\/[a-zA-Z0-9_-]+\/viewform|forms\.gle\/[a-zA-Z0-9_-]+)/i);
-              if (gFormHtml) {
-                const cleanFound = gFormHtml[0].replace(/\\u0026/g, '&').replace(/\\\//g, '/').replace(/[\"'\\]+$/, '');
-                // Exclude any HireDoor internal feedback/report forms
-                if (!cleanFound.includes('1FAIpQLSfQWc_lv_mvwR3mbksJyjCTUjiOgEFjty8N36em97v2diOP_w')) {
-                  return cleanFound;
-                }
               }
 
               return null;

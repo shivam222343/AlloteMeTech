@@ -84,11 +84,10 @@ export default function JobCard({
 
   return (
     <div
-      className={`card group flex flex-col gap-3 p-4 transition-all relative ${
-        isSelected
+      className={`card group flex flex-col gap-3 p-4 transition-all relative ${isSelected
           ? 'border-accent-blue bg-accent-blue/5 shadow-[0_0_15px_rgba(59,130,246,0.18)] ring-1 ring-accent-blue/50'
           : 'hover:border-accent-blue/40'
-      }`}
+        }`}
     >
       {/* Company row */}
       <div className="flex items-start gap-3">
@@ -108,18 +107,30 @@ export default function JobCard({
             />
           </div>
         )}
-        <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center p-1">
-          {companyLogo && !imgError ? (
-            <img
-              src={companyLogo}
-              alt={companyName}
-              onError={() => setImgError(true)}
-              className={`w-full h-full object-contain ${job.company?.hasWhiteBg ? 'bg-white' : ''}`}
-            />
-          ) : (
-            <span className="text-base font-bold text-accent-blue select-none">
-              {(companyName?.trim()?.charAt(0) || 'C').toUpperCase()}
-            </span>
+        <div className="relative flex-shrink-0">
+          <div className="w-10 h-10 rounded-lg overflow-hidden bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center p-1">
+            {companyLogo && !imgError ? (
+              <img
+                src={companyLogo}
+                alt={companyName}
+                onError={() => setImgError(true)}
+                className={`w-full h-full object-contain ${job.company?.hasWhiteBg ? 'bg-white' : ''}`}
+              />
+            ) : (
+              <span className="text-base font-bold text-accent-blue select-none">
+                {(companyName?.trim()?.charAt(0) || 'C').toUpperCase()}
+              </span>
+            )}
+          </div>
+          {job.isReviewed && (
+            <div
+              className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md ring-2 ring-bg-card"
+              title="Verified by Tech AlloteMe"
+            >
+              <svg className="w-2.5 h-2.5 text-white stroke-[3.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
           )}
         </div>
         <div className="flex-1 min-w-0">
@@ -144,23 +155,13 @@ export default function JobCard({
         </div>
       </div>
 
-      {/* Verified Badge by Tech AlloteMe */}
-      {job.isReviewed && (
-        <div className="flex items-center">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shadow-sm">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-            Verified by Tech AlloteMe
-          </span>
-        </div>
-      )}
 
       {/* Tags row */}
       <div className="flex flex-wrap gap-1.5 items-center">
-        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
-          job.category === 'Non-Tech'
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${job.category === 'Non-Tech'
             ? 'text-purple-400 bg-purple-500/10 border-purple-500/20'
             : 'text-accent-blue bg-accent-blue/10 border-accent-blue/20'
-        }`}>
+          }`}>
           {job.category === 'Non-Tech' ? '💼 Non-Tech' : '💻 Tech'}
         </span>
         <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${TYPE_COLORS[job.jobType] || 'text-text-muted bg-bg-secondary'}`}>

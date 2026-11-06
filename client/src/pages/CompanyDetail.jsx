@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { formatRelativeTime } from '../utils/helpers';
 import PremiumButton from '../components/common/PremiumButton';
+import JobsPremiumBanner from '../components/jobs/JobsPremiumBanner';
+import { useJobApply } from '../components/jobs/useJobApply';
 import toast from 'react-hot-toast';
 
 const DATE_OPTIONS = [
@@ -71,6 +73,7 @@ const DifficultyBar = ({ distribution }) => {
 export default function CompanyDetail() {
   const { slug } = useParams();
   const { user, isAdmin } = useAuth();
+  const { hasReachedLimit, handleApply } = useJobApply();
   const qc = useQueryClient();
 
   // Active Tab: 'jobs' (Career Board) or 'problems' (Interview Prep)
@@ -369,6 +372,9 @@ export default function CompanyDetail() {
       {/* ── TAB 1: Open Jobs & Careers (Greenhouse style list) ───────────────── */}
       {activeTab === 'jobs' && (
         <div className="space-y-4">
+          {/* Jobs Premium Banner & Daily Limit Counter for Free Users */}
+          <JobsPremiumBanner />
+
           {/* Search & Work Mode Filters */}
           <div className="card p-3 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="relative flex-1">
@@ -458,30 +464,51 @@ export default function CompanyDetail() {
                     key={job._id}
                     className="card p-4 hover:border-accent-blue/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
-                    <div className="space-y-1.5 min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Link
-                          to={`/jobs/${job.slug}`}
-                          className="text-base font-bold text-text-primary hover:text-accent-blue transition-colors line-clamp-1"
-                        >
-                          {job.title}
-                        </Link>
+                    <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                      <div className="relative flex-shrink-0">
+                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center p-1">
+                          {company.logo ? (
+                            <img
+                              src={company.logo}
+                              alt={company.name}
+                              className={`w-full h-full object-contain ${company.hasWhiteBg ? 'bg-white' : ''}`}
+                            />
+                          ) : (
+                            <span className="text-base font-bold text-accent-blue select-none">
+                              {(company.name?.trim()?.charAt(0) || 'C').toUpperCase()}
+                            </span>
+                          )}
+                        </div>
                         {job.isReviewed && (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                            Verified by Tech AlloteMe
-                          </span>
+                          <div
+                            className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md ring-2 ring-bg-card"
+                            title="Verified by Tech AlloteMe"
+                          >
+                            <svg className="w-2.5 h-2.5 text-white stroke-[3.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
                         )}
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
-                            job.category === 'Non-Tech'
-                              ? 'text-purple-400 bg-purple-500/10 border-purple-500/20'
-                              : 'text-accent-blue bg-accent-blue/10 border-accent-blue/20'
-                          }`}
-                        >
-                          {job.category === 'Non-Tech' ? '💼 Non-Tech' : '💻 Tech'}
-                        </span>
                       </div>
+
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Link
+                            to={`/jobs/${job.slug}`}
+                            className="text-base font-bold text-text-primary hover:text-accent-blue transition-colors line-clamp-1"
+                          >
+                            {job.title}
+                          </Link>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                              job.category === 'Non-Tech'
+                                ? 'text-purple-400 bg-purple-500/10 border-purple-500/20'
+                                : 'text-accent-blue bg-accent-blue/10 border-accent-blue/20'
+                            }`}
+                          >
+                            {job.category === 'Non-Tech' ? '💼 Non-Tech' : '💻 Tech'}
+                          </span>
+                        </div>
 
                       <div className="flex items-center gap-3 text-xs text-text-muted flex-wrap">
                         <span className="font-medium text-text-secondary">{job.jobType}</span>
@@ -523,6 +550,7 @@ export default function CompanyDetail() {
                         </div>
                       )}
                     </div>
+                  </div>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <Link
@@ -550,15 +578,15 @@ export default function CompanyDetail() {
                           <span className="text-xs">👑</span>
                         </button>
                       ) : applyUrl ? (
-                        <a
-                          href={applyUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={(e) => handleApply(e, job)}
                           className="btn btn-primary btn-sm text-xs flex items-center gap-1.5"
+                          title={hasReachedLimit ? 'Daily limit reached (5/5). Upgrade to Premium to apply.' : 'Apply Directly'}
                         >
                           <span>Apply Directly</span>
                           <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
+                        </button>
                       ) : null}
                     </div>
                   </div>

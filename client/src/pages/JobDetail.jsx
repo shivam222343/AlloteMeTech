@@ -23,6 +23,7 @@ import {
   shareOnWhatsApp,
   formatTimeAgo,
 } from '../components/jobs/whatsappHelper';
+import JobsPremiumBanner from '../components/jobs/JobsPremiumBanner';
 import { useJobApply } from '../components/jobs/useJobApply';
 
 function timeAgo(date) {
@@ -290,23 +291,38 @@ export default function JobDetail() {
         <ArrowLeft className="w-4 h-4" /> Back to Jobs
       </Link>
 
+      {/* Jobs Premium Banner & Daily Limit Counter for Free Users */}
+      <JobsPremiumBanner />
+
       {/* Hero Card */}
       <div className="card p-6 mb-6">
         <div className="flex items-start gap-4 mb-4">
-          <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center p-1.5">
-            {companyLogo && !imgError ? (
-              <img
-                src={companyLogo}
-                alt={companyName}
-                onError={() => setImgError(true)}
-                className={`w-full h-full object-contain ${
-                  job.company?.hasWhiteBg ? 'bg-white' : ''
-                }`}
-              />
-            ) : (
-              <span className="text-2xl font-bold text-accent-blue select-none">
-                {(companyName?.trim()?.charAt(0) || 'C').toUpperCase()}
-              </span>
+          <div className="relative flex-shrink-0">
+            <div className="w-16 h-16 rounded-xl overflow-hidden bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center p-1.5">
+              {companyLogo && !imgError ? (
+                <img
+                  src={companyLogo}
+                  alt={companyName}
+                  onError={() => setImgError(true)}
+                  className={`w-full h-full object-contain ${
+                    job.company?.hasWhiteBg ? 'bg-white' : ''
+                  }`}
+                />
+              ) : (
+                <span className="text-2xl font-bold text-accent-blue select-none">
+                  {(companyName?.trim()?.charAt(0) || 'C').toUpperCase()}
+                </span>
+              )}
+            </div>
+            {job.isReviewed && (
+              <div
+                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md ring-2 ring-bg-card"
+                title="Verified by Tech AlloteMe"
+              >
+                <svg className="w-3 h-3 text-white stroke-[3.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
             )}
           </div>
           <div className="flex-1">
@@ -326,15 +342,6 @@ export default function JobDetail() {
               )}
             </div>
 
-            {/* Verified badge */}
-            {job.isReviewed && (
-              <div className="mt-2.5 flex items-center">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shadow-sm">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                  Verified by Tech AlloteMe
-                </span>
-              </div>
-            )}
 
             {/* Time: Just show time, no words like 'Scraped' */}
             <div className="text-xs text-text-faint mt-2">
