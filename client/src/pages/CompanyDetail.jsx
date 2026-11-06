@@ -501,11 +501,11 @@ export default function CompanyDetail() {
                         <span>·</span>
                         {isAdmin ? (
                           <span className="text-text-faint">
-                            Posted {formatRelativeTime(job.postedAt || job.createdAt)} · <span className="text-accent-blue font-medium">Scraped {formatRelativeTime(job.scrapedAt || job.createdAt)}</span>
+                            Posted {formatRelativeTime(job.postedAt || job.createdAt)} · <span className="text-accent-blue font-medium">{formatRelativeTime(job.scrapedAt || job.createdAt)}</span>
                           </span>
                         ) : (
                           <span className="text-text-faint">
-                            Scraped {formatRelativeTime(job.scrapedAt || job.createdAt)}
+                            {formatRelativeTime(job.scrapedAt || job.createdAt)}
                           </span>
                         )}
                       </div>

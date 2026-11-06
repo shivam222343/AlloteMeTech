@@ -1676,7 +1676,7 @@ function ManageJobsTab() {
                   {job.salary && <span className="font-medium text-accent-green">· {job.salary}</span>}
                   <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-text-faint bg-bg-secondary px-2 py-0.5 rounded font-medium border border-border">
                     <Clock className="w-3 h-3 text-accent-blue" />
-                    Posted: {formatTimeAgo(job.postedAt || job.createdAt)} · <span className="text-accent-blue font-semibold">Scraped: {formatTimeAgo(job.scrapedAt || job.createdAt)}</span>
+                    Posted {formatTimeAgo(job.postedAt || job.createdAt)} · <span className="text-accent-blue font-semibold">{formatTimeAgo(job.scrapedAt || job.createdAt)}</span>
                   </span>
                 </div>
                 {job.applyEmail && (

@@ -336,16 +336,16 @@ export default function JobDetail() {
               </div>
             )}
 
-            {/* Time: Admin sees Posted + Scraped. Users see ONLY Scraped time */}
+            {/* Time: Just show time, no words like 'Scraped' */}
             <div className="text-xs text-text-faint mt-2">
               {isAdmin ? (
                 <span className="space-x-1.5">
-                  <span>Posted: {timeAgo(job.postedAt || job.createdAt)}</span>
+                  <span>Posted {timeAgo(job.postedAt || job.createdAt)}</span>
                   <span>·</span>
-                  <span className="text-accent-blue font-medium">Scraped: {timeAgo(job.scrapedAt || job.createdAt)}</span>
+                  <span className="text-accent-blue font-medium">{timeAgo(job.scrapedAt || job.createdAt)}</span>
                 </span>
               ) : (
-                <span>Scraped {timeAgo(job.scrapedAt || job.createdAt)}</span>
+                <span>{timeAgo(job.scrapedAt || job.createdAt)}</span>
               )}
             </div>
           </div>

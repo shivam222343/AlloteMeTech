@@ -190,19 +190,47 @@ function generateSlug(text) {
 
 // Helper: Determine Category (Tech vs Non-Tech)
 function classifyCategory(title = '', department = '', description = '') {
-  const text = `${title} ${department}`.toLowerCase();
+  const t = (title || '').toLowerCase();
+  const dep = (department || '').toLowerCase();
+  const text = `${t} ${dep}`;
+
+  // 1. Explicit Non-Tech exclusion patterns (health, medical, fitness, retail, warehouse, legal, accounting, etc.)
+  const nonTechKeywords = [
+    'personal trainer', 'strength training', 'fitness', 'instructor', 'nurse', 'nursing',
+    'pharmacy', 'pharmacist', 'store manager', 'sales associate', 'cashier', 'driver',
+    'warehouse', 'cook', 'chef', 'barista', 'receptionist', 'customer service',
+    'human resources', 'recruiter', 'talent acquisition', 'accountant', 'accounting',
+    'legal counsel', 'attorney', 'paralegal', 'sales representative', 'account executive',
+    'business development representative', 'therapist', 'physician', 'medical assistant',
+    'retail associate', 'custodian', 'janitor', 'security guard', 'housekeeper',
+  ];
+  for (const nkw of nonTechKeywords) {
+    if (text.includes(nkw)) return 'Non-Tech';
+  }
+
+  // 2. Tech Keywords
   const techKeywords = [
-    'software', 'engineer', 'developer', 'frontend', 'backend', 'full stack', 'fullstack',
-    'web', 'mobile', 'ios', 'android', 'react', 'node', 'python', 'java', 'golang', 'c++',
-    'devops', 'cloud', 'aws', 'azure', 'docker', 'kubernetes', 'sre', 'infrastructure',
-    'data engineer', 'data scientist', 'data analyst', 'machine learning', 'ai', 'deep learning',
-    'qa', 'quality assurance', 'test', 'automation', 'security', 'cyber', 'architect',
-    'tech lead', 'product manager', 'ux', 'ui', 'designer', 'embedded', 'firmware',
+    'software', 'engineer', 'developer', 'frontend', 'front-end', 'backend', 'back-end',
+    'full stack', 'fullstack', 'web', 'mobile', 'ios', 'android', 'react', 'node', 'python',
+    'java', 'golang', 'c++', 'rust', 'devops', 'cloud', 'aws', 'azure', 'docker', 'kubernetes',
+    'sre', 'infrastructure', 'data engineer', 'data scientist', 'data analyst', 'machine learning',
+    'ai', 'deep learning', 'qa', 'quality assurance', 'test', 'automation', 'security',
+    'cyber', 'architect', 'tech lead', 'product manager', 'ux', 'ui', 'designer',
+    'embedded', 'firmware', 'tech intern', 'software intern', 'developer intern',
+    'programmer', 'sde', 'swe', 'database', 'systems engineer', 'network engineer',
+    'solutions architect', 'it specialist', 'it support', 'information technology',
+    'computer science', 'artificial intelligence', 'big data', 'bi analyst', 'business intelligence',
   ];
 
   for (const kw of techKeywords) {
     if (text.includes(kw)) return 'Tech';
   }
+
+  // 3. Fallback: check description for dominant tech skill signals
+  if (/\b(?:coding|javascript|typescript|python|react|golang|node\.js|sql|database|api|backend|frontend|software development|git|aws|ci\/cd)\b/i.test(description)) {
+    return 'Tech';
+  }
+
   return 'Non-Tech';
 }
 
@@ -225,32 +253,47 @@ function filterByDate(postedAt, postedWithinDays) {
 function filterByExperience(title = '', description = '', experienceFilter = 'all') {
   if (!experienceFilter || experienceFilter === 'all') return true;
 
-  const combined = `${title} ${description}`.toLowerCase();
+  const t = (title || '').toLowerCase();
+  const d = (description || '').toLowerCase();
+  const combined = `${t} ${d}`;
+
+  // Roles that are explicitly senior / lead / manager / principal / staff / director
+  const isSeniorOrLead = /\b(?:sr\.?|senior|lead|principal|staff|director|head|vp|vice\s+president|manager|architect|partner|chief)\b/i.test(t);
+
+  // Check if job explicitly demands higher years of experience (e.g. 2+ years, 3+ years, 4+ years, 5+ years)
+  const requiresHigherExperience =
+    /\b(?:[2-9]|\d{2})\s*(?:\+|-|\s*to\s*\d+)?\s*(?:years?|yrs?)(?:\s+of)?\s+(?:relevant\s+|work\s+|professional\s+|software\s+)?experience\b/i.test(d) ||
+    /\b(?:minimum|at\s+least)\s+(?:[2-9]|\d{2})\s*(?:years?|yrs?)\b/i.test(d) ||
+    /\b(?:[2-9]|\d{2})\+\s*(?:years?|yrs?)\b/i.test(d);
 
   if (experienceFilter === 'fresher_intern') {
-    // 0 years / Intern / Fresher
-    return /intern|internship|fresher|graduate|trainee|apprentice|entry level/i.test(combined);
+    if (isSeniorOrLead || requiresHigherExperience) return false;
+    return (
+      /\b(?:intern|internship|fresher|graduate\s+trainee|apprentice|entry[\s-]level|campus|college\s+grad|new\s+grad)\b/i.test(t) ||
+      /\b(?:0\s*(?:years?|yrs?)|no\s+prior\s+experience|fresher|internship|apprentice)\b/i.test(d)
+    );
   }
 
   if (experienceFilter === '0_1') {
-    // 0 to 1 year / Junior / Associate
-    return (
-      /intern|internship|fresher|junior|associate|entry level|0-1|0 - 1|1 year/i.test(combined) &&
-      !/senior|lead|principal|staff|manager/i.test(title)
-    );
+    // Strictly 0 to 1 year of experience required
+    if (isSeniorOrLead || requiresHigherExperience) return false;
+
+    // Check title for 0-1 / entry indicators
+    const has01InTitle = /\b(?:intern|internship|fresher|junior|jr\.?|associate|entry[\s-]level|trainee|apprentice|graduate|new\s+grad|campus|sde[\s-]?1|sde[\s-]?i\b|engineer[\s-]?1|engineer[\s-]?i\b|developer[\s-]?1|developer[\s-]?i\b|analyst[\s-]?1|analyst[\s-]?i\b)\b/i.test(t);
+
+    // Check description for explicit 0-1 / 0-2 / entry / fresher indicators
+    const has01InDesc = /\b(?:0\s*-\s*1|0\s*to\s*1|0\s*-\s*2|0\s*to\s*2|0\s*yr|0\s*year|1\s*yr|1\s*year|fresher|intern|internship|entry[\s-]level|recent\s+grad|new\s+grad|college\s+grad|apprentice|trainee|no\s+experience\s+required|0\s*years?\s+of\s+experience|1\s*year\s+of\s+experience)\b/i.test(d);
+
+    return has01InTitle || has01InDesc;
   }
 
   if (experienceFilter === '1_3') {
-    // 1 to 3 years / Mid Level
-    return (
-      /1-3|1 - 3|2-3|2 - 3|mid-level|mid level|intermediate/i.test(combined) ||
-      (!/senior|lead|principal|staff|director/i.test(title) && !/intern/i.test(title))
-    );
+    if (isSeniorOrLead) return false;
+    return /\b(?:1\s*-\s*3|1\s*to\s*3|2\s*-\s*3|2\s*to\s*3|1\s*\+|2\s*\+|mid[\s-]level|intermediate)\b/i.test(combined);
   }
 
   if (experienceFilter === '3_plus') {
-    // 3+ years / Senior / Lead
-    return /senior|lead|principal|staff|director|architect|3\+|4\+|5\+|6\+/i.test(combined);
+    return isSeniorOrLead || requiresHigherExperience;
   }
 
   return true;
@@ -524,12 +567,10 @@ async function scrapeJobsForCompanyRaw(company) {
  * deduplicating against the database, and updating company stats.
  */
 async function syncJobsForCompany(companyIdOrDoc, options = {}) {
-  const {
-    postedWithinDays = 0, // 0 = all time, 1 = 24h, 2 = 48h, 7 = 1 week, 30 = 1 month
-    experience = 'all',   // 'all', 'fresher_intern', '0_1', '1_3', '3_plus'
-    category = 'all',     // 'all', 'Tech', 'Non-Tech'
-    limit = 200,
-  } = options;
+  const postedWithinDays = options.postedWithinDays !== undefined ? options.postedWithinDays : 'all';
+  const experienceFilter = options.experienceFilter || options.experience || 'all';
+  const categoryFilter = options.categoryFilter || options.category || 'all';
+  const limit = options.limit || 200;
 
   let company = companyIdOrDoc;
   if (typeof companyIdOrDoc === 'string' || mongoose.isObjectIdOrHexString(companyIdOrDoc)) {
@@ -580,14 +621,15 @@ async function syncJobsForCompany(companyIdOrDoc, options = {}) {
       }
 
       // Filter: Experience
-      if (!filterByExperience(rawJob.title, rawJob.description, experience)) {
+      const jobDesc = rawJob.description || rawJob.rawHtml || '';
+      if (!filterByExperience(rawJob.title, jobDesc, experienceFilter)) {
         filteredOutCount++;
         continue;
       }
 
-      // Classify Category
-      const detectedCategory = classifyCategory(rawJob.title, rawJob.department, rawJob.description);
-      if (category !== 'all' && detectedCategory !== category) {
+      // Classify Category: Tech vs Non-Tech
+      const detectedCategory = classifyCategory(rawJob.title, rawJob.department, jobDesc);
+      if (categoryFilter !== 'all' && detectedCategory !== categoryFilter) {
         filteredOutCount++;
         continue;
       }
@@ -742,4 +784,6 @@ module.exports = {
   fetchRipplingJobs,
   syncJobsForCompany,
   globalSyncCompanies,
+  classifyCategory,
+  filterByExperience,
 };
