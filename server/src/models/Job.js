@@ -29,6 +29,8 @@ const jobSchema = new mongoose.Schema({
   scrapedAt: { type: Date, default: null },
   postedAt: { type: Date, default: Date.now },
   expiresAt: { type: Date, default: null },
+  isReviewed: { type: Boolean, default: false, index: true },
+  reviewedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 jobSchema.index({ title: 'text', companyName: 'text', description: 'text' });

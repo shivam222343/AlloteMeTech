@@ -10,6 +10,8 @@ const {
   createJob,
   updateJob,
   deleteJob,
+  reviewJob,
+  adminBulkReview,
   aiParseJob,
   aiBulkParse,
   bulkCreateJobs,
@@ -35,6 +37,7 @@ router.post('/admin/ai-parse', protect, adminOnly, aiParseJob);
 router.post('/admin/ai-bulk-parse', protect, adminOnly, aiBulkParse);
 router.post('/admin/bulk-create', protect, adminOnly, bulkCreateJobs);
 router.post('/admin/bulk-delete', protect, adminOnly, adminBulkDelete);
+router.post('/admin/bulk-review', protect, adminOnly, adminBulkReview);
 router.post('/admin/sync-hiredoor', protect, adminOnly, syncHireDoor);
 router.post('/admin/stop-sync', protect, adminOnly, stopSync);
 router.get('/admin/sync-status', protect, adminOnly, getSyncStatus);
@@ -44,13 +47,14 @@ router.get('/admin/sync-logs/stream', protect, adminOnly, streamSyncLogs);
 router.get('/apply/status', optionalAuth, getApplyStatus);
 router.post('/apply/track', optionalAuth, trackJobApply);
 
-// Public routes
-router.get('/', getJobs);
+// Public routes (with optionalAuth to determine free vs premium user gating)
+router.get('/', optionalAuth, getJobs);
 router.get('/og/:slug', serveJobOgHtml);
-router.get('/:slug', getJob);
+router.get('/:slug', optionalAuth, getJob);
 
 // Admin CRUD routes
 router.post('/', protect, adminOnly, createJob);
+router.patch('/:id/review', protect, adminOnly, reviewJob);
 router.put('/:id', protect, adminOnly, updateJob);
 router.delete('/:id', protect, adminOnly, deleteJob);
 

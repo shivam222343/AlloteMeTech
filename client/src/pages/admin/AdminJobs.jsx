@@ -781,6 +781,7 @@ function ManageJobsTab() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [reviewFilter, setReviewFilter] = useState('all'); // 'all', 'unreviewed', 'reviewed'
   const [editingJob, setEditingJob] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [stoppingSync, setStoppingSync] = useState(false);
@@ -855,8 +856,17 @@ function ManageJobsTab() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-jobs', page, search, categoryFilter],
-    queryFn: () => jobsApi.adminGetAll({ page, limit: 10, search, category: categoryFilter }).then(r => r.data),
+    queryKey: ['admin-jobs', page, search, categoryFilter, reviewFilter],
+    queryFn: () =>
+      jobsApi
+        .adminGetAll({
+          page,
+          limit: 10,
+          search,
+          category: categoryFilter,
+          isReviewed: reviewFilter === 'all' ? undefined : (reviewFilter === 'reviewed' ? 'true' : 'false'),
+        })
+        .then((r) => r.data),
   });
 
   const jobs = data?.data || [];
@@ -950,6 +960,32 @@ function ManageJobsTab() {
     ) {
       bulkDeleteMutation.mutate(Array.from(selectedIds));
     }
+  };
+
+  const reviewMutation = useMutation({
+    mutationFn: ({ id, isReviewed }) => jobsApi.reviewJob(id, isReviewed),
+    onSuccess: (res) => {
+      toast.success(res?.data?.message || 'Review status updated');
+      queryClient.invalidateQueries(['admin-jobs']);
+      queryClient.invalidateQueries(['jobs']);
+    },
+    onError: () => toast.error('Failed to update review status'),
+  });
+
+  const bulkReviewMutation = useMutation({
+    mutationFn: ({ ids, isReviewed }) => jobsApi.bulkReview(ids, isReviewed),
+    onSuccess: (res) => {
+      toast.success(res?.data?.message || 'Updated selected jobs');
+      setSelectedIds(new Set());
+      queryClient.invalidateQueries(['admin-jobs']);
+      queryClient.invalidateQueries(['jobs']);
+    },
+    onError: () => toast.error('Failed to update selected jobs'),
+  });
+
+  const handleBulkReview = (isReviewed) => {
+    if (selectedIds.size === 0) return;
+    bulkReviewMutation.mutate({ ids: Array.from(selectedIds), isReviewed });
   };
 
   const updateMutation = useMutation({
@@ -1084,6 +1120,28 @@ function ManageJobsTab() {
               }`}
             >
               {cat.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Review Approval Status Filter Tabs */}
+        <div className="flex items-center gap-1 bg-bg-secondary p-1 rounded-lg border border-border overflow-x-auto no-scrollbar flex-shrink-0">
+          {[
+            { id: 'all', label: 'All Jobs' },
+            { id: 'unreviewed', label: '⏳ Pending Review' },
+            { id: 'reviewed', label: '✓ Verified & Published' },
+          ].map((st) => (
+            <button
+              key={st.id}
+              type="button"
+              onClick={() => { setReviewFilter(st.id); setPage(1); }}
+              className={`px-3 py-1 text-xs font-semibold rounded-md whitespace-nowrap transition-all ${
+                reviewFilter === st.id
+                  ? 'bg-emerald-600 text-white shadow-sm font-bold'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              {st.label}
             </button>
           ))}
         </div>
@@ -1483,6 +1541,25 @@ function ManageJobsTab() {
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
+              onClick={() => handleBulkReview(true)}
+              disabled={bulkReviewMutation.isPending}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+              title="Approve & Verify selected jobs to make them visible to users"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Approve &amp; Verify ({selectedIds.size})
+            </button>
+
+            <button
+              onClick={() => handleBulkReview(false)}
+              disabled={bulkReviewMutation.isPending}
+              className="btn btn-ghost btn-sm text-xs text-amber-400 hover:bg-amber-400/10 border border-amber-400/25 flex items-center gap-1.5"
+              title="Unapprove selected jobs to hide them from users"
+            >
+              Unapprove ({selectedIds.size})
+            </button>
+
+            <button
               onClick={handleShareSelectedWhatsApp}
               className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#25D366] hover:bg-[#20ba5a] transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
             >
@@ -1570,6 +1647,16 @@ function ManageJobsTab() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                   <span className="text-sm font-semibold text-text-primary leading-snug break-words">{job.title}</span>
+                  {job.isReviewed ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 whitespace-nowrap">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      ✓ Verified
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 whitespace-nowrap">
+                      ⏳ Pending Review (Hidden)
+                    </span>
+                  )}
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
                     job.category === 'Non-Tech'
                       ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
@@ -1587,17 +1674,10 @@ function ManageJobsTab() {
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs text-text-faint mt-1">
                   <span>{formatCompanyName(job)} · {job.jobType} · {job.workMode}</span>
                   {job.salary && <span className="font-medium text-accent-green">· {job.salary}</span>}
-                  {(job.scrapedAt || (job.source === 'scraped' && job.createdAt)) && (
-                    <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-accent-blue bg-accent-blue/5 border border-accent-blue/20 px-1.5 py-0.5 rounded font-medium">
-                      <Clock className="w-2.5 h-2.5 text-accent-blue" />
-                      Scraped: {new Date(job.scrapedAt || job.createdAt).toLocaleString('en-IN', {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  )}
+                  <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-text-faint bg-bg-secondary px-2 py-0.5 rounded font-medium border border-border">
+                    <Clock className="w-3 h-3 text-accent-blue" />
+                    Posted: {formatTimeAgo(job.postedAt || job.createdAt)} · <span className="text-accent-blue font-semibold">Scraped: {formatTimeAgo(job.scrapedAt || job.createdAt)}</span>
+                  </span>
                 </div>
                 {job.applyEmail && (
                   <p className="text-xs text-accent-blue mt-1 flex items-center gap-1 break-all">
@@ -1611,6 +1691,21 @@ function ManageJobsTab() {
                 )}
               </div>
               <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 self-start">
+                {/* 1-Click Toggle Review/Approve */}
+                <button
+                  type="button"
+                  onClick={() => reviewMutation.mutate({ id: job._id, isReviewed: !job.isReviewed })}
+                  disabled={reviewMutation.isPending}
+                  className={`btn-icon btn-ghost w-7 h-7 ${
+                    job.isReviewed
+                      ? 'text-emerald-400 hover:bg-emerald-400/10'
+                      : 'text-amber-400 hover:bg-amber-400/10'
+                  }`}
+                  title={job.isReviewed ? 'Click to unapprove (hide from users)' : 'Click to approve & verify (show to users)'}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </button>
+
                 {/* Single WhatsApp Share */}
                 <button
                   type="button"

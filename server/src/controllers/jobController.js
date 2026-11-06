@@ -27,7 +27,17 @@ function replaceHiredoorWithAlloteme(val) {
 // ── Public: Get All Jobs ──────────────────────────────────────────────────────
 exports.getJobs = async (req, res) => {
   const { page = 1, limit = 20, search, jobType, workMode, company, tag, category } = req.query;
+  const isAdmin = Boolean(req.user && req.user.role === 'admin');
+  const isPaidOrAdmin = Boolean(
+    isAdmin || (req.user && req.user.isPremium && (!req.user.premiumExpiresAt || new Date(req.user.premiumExpiresAt) > new Date()))
+  );
+
   const query = { isActive: true };
+
+  // Regular users only see admin-reviewed & approved jobs
+  if (!isAdmin) {
+    query.isReviewed = true;
+  }
   
   if (search) query.$or = [
     { title: new RegExp(search, 'i') },
@@ -54,17 +64,103 @@ exports.getJobs = async (req, res) => {
   }
 
   const skip = (Number(page) - 1) * Number(limit);
+  const countFilter = !isAdmin ? { isActive: true, isReviewed: true } : { isActive: true };
+
   const [jobs, total, techCount, nonTechCount] = await Promise.all([
     Job.find(query)
-      .populate('company', 'name slug logo hasWhiteBg')
+      .populate('company', 'name slug logo hasWhiteBg website')
       .sort({ isFeatured: -1, postedAt: -1 })
       .skip(skip)
       .limit(Number(limit))
       .lean(),
     Job.countDocuments(query),
-    Job.countDocuments({ isActive: true, $or: [{ category: 'Tech' }, { category: { $exists: false } }, { category: null }] }),
-    Job.countDocuments({ isActive: true, category: 'Non-Tech' }),
+    Job.countDocuments({ ...countFilter, $or: [{ category: 'Tech' }, { category: { $exists: false } }, { category: null }] }),
+    Job.countDocuments({ ...countFilter, category: 'Non-Tech' }),
   ]);
+
+  // Fallback company logo and original name population for jobs where company reference is missing or logo is empty
+  const unlinkedTags = jobs
+    .filter(j => (!j.company || !j.company.logo) && j.companyTag)
+    .map(j => j.companyTag.toLowerCase());
+
+  if (unlinkedTags.length > 0) {
+    const matchedCompanies = await Company.find({
+      slug: { $in: unlinkedTags }
+    }).select('name slug logo hasWhiteBg').lean();
+
+    const compMap = new Map();
+    matchedCompanies.forEach(c => compMap.set(c.slug.toLowerCase(), c));
+
+    jobs.forEach(j => {
+      if ((!j.company || !j.company.logo) && j.companyTag) {
+        const found = compMap.get(j.companyTag.toLowerCase());
+        if (found) {
+          if (!j.company) {
+            j.company = found;
+          } else if (!j.company.logo) {
+            j.company.logo = found.logo;
+          }
+          if (!j.companyLogo && found.logo) j.companyLogo = found.logo;
+          if (found.name && (!j.companyName || j.companyName.toLowerCase() === j.companyTag.toLowerCase())) {
+            j.companyName = found.name;
+          }
+        }
+      }
+    });
+  }
+
+  // Free vs Paid Apply Gating:
+  // Paid users & admins: all jobs are unlocked.
+  // Free users: only the 5 OLDEST jobs per company are unlocked; newer/current jobs are locked.
+  if (!isPaidOrAdmin) {
+    const companyTags = Array.from(new Set(jobs.map(j => j.companyTag).filter(Boolean)));
+    const unlockedIdSet = new Set();
+
+    if (companyTags.length > 0) {
+      const oldestPerCompany = await Job.aggregate([
+        {
+          $match: {
+            companyTag: { $in: companyTags },
+            isActive: true,
+            isReviewed: true,
+          }
+        },
+        { $sort: { postedAt: 1, createdAt: 1 } },
+        {
+          $group: {
+            _id: '$companyTag',
+            oldestIds: { $push: '$_id' }
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            unlockedIds: { $slice: ['$oldestIds', 5] }
+          }
+        }
+      ]);
+
+      oldestPerCompany.forEach(item => {
+        if (Array.isArray(item.unlockedIds)) {
+          item.unlockedIds.forEach(id => unlockedIdSet.add(id.toString()));
+        }
+      });
+    }
+
+    jobs.forEach(j => {
+      const isUnlocked = unlockedIdSet.has(j._id.toString());
+      j.isLocked = !isUnlocked;
+      if (j.isLocked) {
+        j.applyLink = null;
+        j.applyEmail = null;
+        j.contactPhone = null;
+      }
+    });
+  } else {
+    jobs.forEach(j => {
+      j.isLocked = false;
+    });
+  }
 
   return ApiResponse.paginated(res, jobs, {
     page: Number(page),
@@ -78,10 +174,60 @@ exports.getJobs = async (req, res) => {
 
 // ── Public: Get Single Job ────────────────────────────────────────────────────
 exports.getJob = async (req, res) => {
-  const job = await Job.findOne({ slug: req.params.slug, isActive: true })
+  const isAdmin = Boolean(req.user && req.user.role === 'admin');
+  const isPaidOrAdmin = Boolean(
+    isAdmin || (req.user && req.user.isPremium && (!req.user.premiumExpiresAt || new Date(req.user.premiumExpiresAt) > new Date()))
+  );
+
+  const query = { slug: req.params.slug, isActive: true };
+  if (!isAdmin) {
+    query.isReviewed = true;
+  }
+
+  const job = await Job.findOne(query)
     .populate('company', 'name slug logo hasWhiteBg website industry');
-  if (!job) return ApiResponse.notFound(res, 'Job not found');
-  return ApiResponse.success(res, { job });
+  if (!job) return ApiResponse.notFound(res, 'Job not found or pending admin review');
+
+  // Fallback logo & name from Company collection if needed
+  if ((!job.company || !job.company.logo) && job.companyTag) {
+    const matchedCompany = await Company.findOne({ slug: job.companyTag.toLowerCase() })
+      .select('name slug logo hasWhiteBg website industry')
+      .lean();
+    if (matchedCompany) {
+      if (!job.company) job.company = matchedCompany;
+      if (!job.companyLogo && matchedCompany.logo) job.companyLogo = matchedCompany.logo;
+      if (matchedCompany.name && (!job.companyName || job.companyName.toLowerCase() === job.companyTag.toLowerCase())) {
+        job.companyName = matchedCompany.name;
+      }
+    }
+  }
+
+  const jobObj = job.toObject ? job.toObject() : job;
+
+  // Free vs Paid user apply gating
+  if (!isPaidOrAdmin) {
+    const oldestJobs = await Job.find({
+      companyTag: job.companyTag,
+      isActive: true,
+      isReviewed: true,
+    })
+      .sort({ postedAt: 1, createdAt: 1 })
+      .limit(5)
+      .select('_id')
+      .lean();
+
+    const isUnlocked = oldestJobs.some(oj => oj._id.toString() === job._id.toString());
+    jobObj.isLocked = !isUnlocked;
+    if (jobObj.isLocked) {
+      jobObj.applyLink = null;
+      jobObj.applyEmail = null;
+      jobObj.contactPhone = null;
+    }
+  } else {
+    jobObj.isLocked = false;
+  }
+
+  return ApiResponse.success(res, { job: jobObj });
 };
 
 // ── Public: Serve Job OG HTML (for bots / WhatsApp preview crawlers) ──────────
@@ -170,10 +316,12 @@ exports.serveJobOgHtml = async (req, res) => {
 
 // ── Admin: Get All Jobs (including inactive) ──────────────────────────────────
 exports.adminGetJobs = async (req, res) => {
-  const { page = 1, limit = 20, search, source, category } = req.query;
+  const { page = 1, limit = 20, search, source, category, isReviewed } = req.query;
   const query = {};
   if (search) query.$or = [{ title: new RegExp(search, 'i') }, { companyName: new RegExp(search, 'i') }];
   if (source) query.source = source;
+  if (isReviewed === 'true') query.isReviewed = true;
+  else if (isReviewed === 'false') query.isReviewed = false;
 
   if (category && category !== 'all') {
     if (category === 'Non-Tech') {
@@ -191,11 +339,13 @@ exports.adminGetJobs = async (req, res) => {
   }
 
   const skip = (Number(page) - 1) * Number(limit);
-  const [jobs, total, techCount, nonTechCount] = await Promise.all([
-    Job.find(query).populate('company', 'name slug logo').sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+  const [jobs, total, techCount, nonTechCount, pendingReviewCount, reviewedCount] = await Promise.all([
+    Job.find(query).populate('company', 'name slug logo hasWhiteBg').sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
     Job.countDocuments(query),
     Job.countDocuments({ $or: [{ category: 'Tech' }, { category: { $exists: false } }, { category: null }] }),
     Job.countDocuments({ category: 'Non-Tech' }),
+    Job.countDocuments({ isReviewed: false }),
+    Job.countDocuments({ isReviewed: true }),
   ]);
   return ApiResponse.paginated(res, jobs, {
     page: Number(page),
@@ -204,34 +354,52 @@ exports.adminGetJobs = async (req, res) => {
     pages: Math.ceil(total / Number(limit)),
     techCount,
     nonTechCount,
+    pendingReviewCount,
+    reviewedCount,
   });
+};
+
+// ── Admin: Review / Approve Single Job ───────────────────────────────────────
+exports.reviewJob = async (req, res) => {
+  const { id } = req.params;
+  const { isReviewed } = req.body;
+  const job = await Job.findById(id);
+  if (!job) return ApiResponse.notFound(res, 'Job not found');
+
+  job.isReviewed = isReviewed !== undefined ? Boolean(isReviewed) : !job.isReviewed;
+  job.reviewedAt = job.isReviewed ? new Date() : null;
+  await job.save();
+
+  return ApiResponse.success(res, { job }, job.isReviewed ? 'Job marked as verified & approved' : 'Job unapproved');
+};
+
+// ── Admin: Bulk Review / Approve Jobs ───────────────────────────────────────
+exports.adminBulkReview = async (req, res) => {
+  const { ids, isReviewed = true } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return ApiResponse.error(res, 'ids array is required', 400);
+  }
+  const status = Boolean(isReviewed);
+  const result = await Job.updateMany(
+    { _id: { $in: ids } },
+    {
+      $set: {
+        isReviewed: status,
+        reviewedAt: status ? new Date() : null,
+      }
+    }
+  );
+  return ApiResponse.success(res, { modifiedCount: result.modifiedCount }, `Updated ${result.modifiedCount} jobs`);
 };
 
 // ── Helper: validate genuine company logo URL ─────────────────────────────────
 function isValidCompanyLogo(url) {
   if (!url || typeof url !== 'string') return false;
   const clean = url.trim().toLowerCase();
-  if (!clean.startsWith('http://') && !clean.startsWith('https://')) return false;
+  if (!clean.startsWith('http://') && !clean.startsWith('https://') && !clean.startsWith('data:image/')) return false;
 
-  // Disallow third-party favicon fetchers, search engines, social networks, Google avatars, and generic banners
-  const blockedPatterns = [
-    'google.com/s2/favicons',
-    'bing.com',
-    'linkedin',
-    'instagram',
-    'whatsapp',
-    'facebook',
-    'twitter',
-    'youtube',
-    'googleusercontent',
-    'avatar',
-    'og-image',
-    'open%20graph',
-    'landingpage',
-    'banner',
-  ];
-
-  if (blockedPatterns.some((pattern) => clean.includes(pattern))) {
+  // Disallow tiny 16px google favicon fetchers
+  if (clean.includes('google.com/s2/favicons') && clean.includes('sz=16')) {
     return false;
   }
 
@@ -1838,6 +2006,7 @@ exports.getApplyStatus = async (req, res) => {
 // ── Public / Auth: Track a Job Application & Enforce Daily Limits ─────────────
 exports.trackJobApply = async (req, res) => {
   const user = req.user;
+  const { jobId } = req.body;
   const today = new Date().toISOString().slice(0, 10);
 
   if (!user) {
@@ -1853,7 +2022,9 @@ exports.trackJobApply = async (req, res) => {
   }
 
   const isPremium = !!(user.isPremium && user.premiumExpiresAt && new Date(user.premiumExpiresAt) > new Date());
-  if (isPremium) {
+  const isAdmin = user.role === 'admin';
+
+  if (isPremium || isAdmin) {
     const curCount = user.dailyJobApplies?.date === today ? (user.dailyJobApplies.count || 0) : 0;
     user.dailyJobApplies = { count: curCount + 1, date: today };
     await user.save();
@@ -1866,6 +2037,32 @@ exports.trackJobApply = async (req, res) => {
       hasReachedLimit: false,
       allowed: true,
     });
+  }
+
+  // Free user: check if the targeted job is locked (only the 5 oldest jobs per company are unlocked)
+  if (jobId) {
+    const targetJob = await Job.findById(jobId).select('companyTag isReviewed isActive');
+    if (targetJob && targetJob.companyTag) {
+      const oldestJobs = await Job.find({
+        companyTag: targetJob.companyTag,
+        isActive: true,
+        isReviewed: true,
+      })
+        .sort({ postedAt: 1, createdAt: 1 })
+        .limit(5)
+        .select('_id')
+        .lean();
+
+      const isUnlocked = oldestJobs.some(oj => oj._id.toString() === targetJob._id.toString());
+      if (!isUnlocked) {
+        return ApiResponse.error(
+          res,
+          'This job is locked for free users. Please upgrade to Premium to apply to latest jobs!',
+          403,
+          { isLocked: true }
+        );
+      }
+    }
   }
 
   // Free user: limit is 5 applications per day

@@ -28,7 +28,7 @@ router.patch('/:id', protect, adminOnly, updateCompanyInfo);
 
 // ── Public & Career Board Routes ─────────────────────────────────────────────
 router.get('/', getCompanies);
-router.get('/:slugOrId/jobs', getCompanyJobs);
+router.get('/:slugOrId/jobs', optionalAuth, getCompanyJobs);
 router.get('/:slug', getCompany);
 router.get('/:slug/problems', optionalAuth, getCompanyProblems);
 

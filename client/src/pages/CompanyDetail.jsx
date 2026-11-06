@@ -301,7 +301,8 @@ export default function CompanyDetail() {
               </button>
             )}
 
-            {company.website && (
+            {/* Admin-Only External Links: Hide from free/regular users so they don't bypass AlloteMe */}
+            {isAdmin && company.website && (
               <a
                 href={company.website}
                 target="_blank"
@@ -313,7 +314,7 @@ export default function CompanyDetail() {
               </a>
             )}
 
-            {company.boardUrl && (
+            {isAdmin && company.boardUrl && (
               <a
                 href={company.boardUrl}
                 target="_blank"
@@ -465,6 +466,12 @@ export default function CompanyDetail() {
                         >
                           {job.title}
                         </Link>
+                        {job.isReviewed && (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            Verified by Tech AlloteMe
+                          </span>
+                        )}
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
                             job.category === 'Non-Tech'
@@ -492,9 +499,15 @@ export default function CompanyDetail() {
                           </>
                         )}
                         <span>·</span>
-                        <span className="text-text-faint">
-                          Posted {formatRelativeTime(job.postedAt || job.createdAt)}
-                        </span>
+                        {isAdmin ? (
+                          <span className="text-text-faint">
+                            Posted {formatRelativeTime(job.postedAt || job.createdAt)} · <span className="text-accent-blue font-medium">Scraped {formatRelativeTime(job.scrapedAt || job.createdAt)}</span>
+                          </span>
+                        ) : (
+                          <span className="text-text-faint">
+                            Scraped {formatRelativeTime(job.scrapedAt || job.createdAt)}
+                          </span>
+                        )}
                       </div>
 
                       {job.tags && job.tags.length > 0 && (
@@ -518,7 +531,25 @@ export default function CompanyDetail() {
                       >
                         View Details
                       </Link>
-                      {applyUrl && (
+                      {job.isLocked ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.dispatchEvent(
+                              new CustomEvent('open-premium-modal', {
+                                detail: {
+                                  message: 'Unlock latest jobs! Free users can only access the 5 oldest archived jobs per company. Upgrade to Premium to instantly apply to all newly posted jobs!',
+                                },
+                              })
+                            );
+                          }}
+                          className="btn btn-sm text-xs px-3 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold hover:brightness-110 shadow-sm flex items-center gap-1 cursor-pointer rounded-lg"
+                          title="Locked for free users. Upgrade to Premium to apply."
+                        >
+                          <span>Take Subscription</span>
+                          <span className="text-xs">👑</span>
+                        </button>
+                      ) : applyUrl ? (
                         <a
                           href={applyUrl}
                           target="_blank"
@@ -528,7 +559,7 @@ export default function CompanyDetail() {
                           <span>Apply Directly</span>
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 );

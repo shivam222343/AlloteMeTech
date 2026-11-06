@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { paymentApi } from '../../api';
-import { X, CheckCircle, ShieldCheck, Calendar, Building2, BarChart3, Lock, Zap, FileText, Check } from 'lucide-react';
+import { X, CheckCircle, ShieldCheck, Calendar, Building2, BarChart3, Zap, FileText, Check, ArrowRight, Sparkles, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
@@ -191,10 +191,10 @@ const PremiumModal = () => {
           <X className="w-4 h-4" />
         </button>
 
-        {/* Optional limit message banner */}
+        {/* Optional reason message banner */}
         {modalReason && (
           <div className="mb-4 p-3 rounded-xl bg-accent-purple/10 border border-accent-purple/25 flex items-center gap-2.5 text-xs text-text-primary">
-            <Lock className="w-4 h-4 text-accent-purple flex-shrink-0" />
+            <Sparkles className="w-4 h-4 text-accent-purple flex-shrink-0" />
             <span className="font-semibold">{modalReason}</span>
           </div>
         )}
@@ -220,52 +220,52 @@ const PremiumModal = () => {
                 AlloteMe Tech + Jobs Premium.
               </h2>
               <p className="text-xs sm:text-sm text-text-muted leading-relaxed max-w-md">
-                Everything you need to practice coding questions, match jobs, and apply unlimited every day with automation.
+                Unlock all latest job applications, verified recruiter direct links, and company interview preparation.
               </p>
 
               {/* Benefits list */}
               <div className="mt-5 sm:mt-6 space-y-3.5">
-                {/* Benefit 1: Unlimited Applies */}
+                {/* Benefit 1: Unlock All Jobs & Unlimited Applies */}
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
                     <Zap className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">Apply unlimited everyday</h3>
-                    <p className="text-[11px] text-text-muted mt-0.5">No 5-job daily cap. Direct instant links to external career portals & forms.</p>
+                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">Unlock All Latest Jobs &amp; Unlimited Applies</h3>
+                    <p className="text-[11px] text-text-muted mt-0.5">No locked job cards, no 5-job cap. Apply to unlimited newly posted roles every day.</p>
                   </div>
                 </div>
 
-                {/* Benefit 2: Auto Apply Workflow */}
+                {/* Benefit 2: Direct ATS & Recruiter Portals */}
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-accent-purple/10 border border-accent-purple/20 flex items-center justify-center text-accent-purple flex-shrink-0">
-                    <Check className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">Auto apply workflow with powerful automation</h3>
-                    <p className="text-[11px] text-text-muted mt-0.5">Streamline applications with smart auto-fill (daily limit 25 automated jobs).</p>
-                  </div>
-                </div>
-
-                {/* Benefit 3: Resume Review & Matching */}
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0">
-                    <FileText className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">Resume review & Skill-specific job matching</h3>
-                    <p className="text-[11px] text-text-muted mt-0.5">Tailor your resume for ATS and find high-matching job roles instantly.</p>
-                  </div>
-                </div>
-
-                {/* Benefit 4: 450+ Company Interview Questions */}
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 flex-shrink-0">
                     <Building2 className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">Everything included in earlier Tech AlloteMe plan</h3>
-                    <p className="text-[11px] text-text-muted mt-0.5">450+ company questions, frequency tracking, analytics, and smart schedules.</p>
+                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">12,000+ Company Direct ATS Portals</h3>
+                    <p className="text-[11px] text-text-muted mt-0.5">Direct application links to Workday, Greenhouse, Lever, Ashby &amp; SmartRecruiters boards.</p>
+                  </div>
+                </div>
+
+                {/* Benefit 3: Hidden Recruiter Contacts & HR Emails */}
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0">
+                    <MessageCircle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">Hidden Recruiter Contacts &amp; Verified HR Emails</h3>
+                    <p className="text-[11px] text-text-muted mt-0.5">Direct hiring manager emails and WhatsApp contacts to bypass noisy job boards.</p>
+                  </div>
+                </div>
+
+                {/* Benefit 4: 450+ Company Coding Problems & Prep */}
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 flex-shrink-0">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-bold text-text-primary">450+ Company Interview &amp; LeetCode Questions</h3>
+                    <p className="text-[11px] text-text-muted mt-0.5">Company-wise asked interview questions with frequency tracking, ATS resume matching &amp; auto-apply workflow.</p>
                   </div>
                 </div>
               </div>
@@ -344,12 +344,12 @@ const PremiumModal = () => {
               {/* Quick Feature Checklist */}
               <ul className="space-y-2 mb-4">
                 {[
-                  'Apply Unlimited Jobs Everyday',
-                  'Auto Apply Workflow (25/day limit)',
-                  'Resume Review & Improvement',
-                  'Skill Specific Job Matching',
-                  '450+ Company Interview Questions',
-                  'Interview Frequency & Analytics',
+                  'Unlock All Latest Verified Jobs (No locked roles)',
+                  'Direct ATS Applications (12,000+ Companies)',
+                  'Access Hidden HR & Recruiter Contacts',
+                  'Instant WhatsApp Alerts & Direct Links',
+                  '450+ Company Interview & LeetCode Questions',
+                  'Resume Review & ATS Match Scoring',
                 ].map((feat, i) => (
                   <li key={i} className="flex items-center gap-2">
                     <CheckCircle className="w-3.5 h-3.5 text-accent-green flex-shrink-0" />
@@ -402,7 +402,7 @@ const PremiumModal = () => {
               <button
                 onClick={handleCheckout}
                 disabled={paying}
-                className="relative flex items-center gap-3 p-2.5 pr-4 rounded-2xl border border-accent-purple/35 bg-bg-card hover:border-accent-purple/65 hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all duration-300 active:scale-[0.98] select-none text-left w-full disabled:opacity-50 cursor-pointer"
+                className="relative group flex items-center gap-3 p-2.5 pr-4 rounded-2xl border border-accent-purple/35 bg-bg-card hover:border-accent-purple/65 hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all duration-300 active:scale-[0.98] select-none text-left w-full disabled:opacity-50 cursor-pointer"
               >
                 {/* Glow Spark */}
                 <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-amber-300 shadow-[0_0_10px_#fbbf24] animate-pulse" />
@@ -418,15 +418,17 @@ const PremiumModal = () => {
                 {/* Text Column */}
                 <div className="flex-1 min-w-0">
                   <h3 className="text-sm sm:text-base font-extrabold tracking-tight bg-gradient-to-r from-amber-200 via-amber-300 to-yellow-500 bg-clip-text text-transparent leading-none">
-                    {paying ? 'Processing...' : `Pay ₹${finalPrice} Securely`}
+                    {paying ? 'Processing...' : `Pay Now — ₹${finalPrice}`}
                   </h3>
                   <p className="text-[9px] font-bold text-text-muted tracking-widest uppercase mt-1 leading-none">
-                    {planType === '3months' ? '3 Months Access' : '1 Month Access'}
+                    {planType === '3months' ? '3 Months Full Access' : '1 Month Full Access'}
                   </p>
                 </div>
 
-                {/* Lock Icon */}
-                <Lock className="w-4 h-4 text-accent-purple ml-auto flex-shrink-0 animate-pulse" />
+                {/* Professional Arrow instead of Lock */}
+                <div className="w-8 h-8 rounded-xl bg-accent-purple/10 border border-accent-purple/30 flex items-center justify-center text-accent-purple ml-auto flex-shrink-0 group-hover:bg-accent-purple group-hover:text-white group-hover:translate-x-0.5 transition-all">
+                  <ArrowRight className="w-4 h-4" />
+                </div>
               </button>
 
               {/* Secured Text under button */}

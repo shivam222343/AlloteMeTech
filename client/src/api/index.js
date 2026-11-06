@@ -126,6 +126,8 @@ export const jobsApi = {
   update: (id, data) => api.put(`/jobs/${id}`, data),
   delete: (id) => api.delete(`/jobs/${id}`),
   bulkDelete: (ids) => api.post('/jobs/admin/bulk-delete', { ids }),
+  reviewJob: (id, isReviewed) => api.patch(`/jobs/${id}/review`, { isReviewed }),
+  bulkReview: (ids, isReviewed = true) => api.post('/jobs/admin/bulk-review', { ids, isReviewed }),
   aiParse: (data) => api.post('/jobs/admin/ai-parse', data),
   aiBulkParse: (data) => api.post('/jobs/admin/ai-bulk-parse', data),
   bulkCreate: (jobs) => api.post('/jobs/admin/bulk-create', { jobs }),

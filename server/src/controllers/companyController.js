@@ -371,7 +371,15 @@ exports.getCompanyJobs = async (req, res) => {
     company = await Company.findOne({ name: new RegExp('^' + slugOrId + '$', 'i') }).lean();
   }
 
+  const isAdmin = Boolean(req.user && req.user.role === 'admin');
+  const isPaidOrAdmin = Boolean(
+    isAdmin || (req.user && req.user.isPremium && (!req.user.premiumExpiresAt || new Date(req.user.premiumExpiresAt) > new Date()))
+  );
+
   const jobQuery = { isActive: true };
+  if (!isAdmin) {
+    jobQuery.isReviewed = true;
+  }
 
   if (company) {
     jobQuery.$or = [
@@ -416,13 +424,57 @@ exports.getCompanyJobs = async (req, res) => {
 
   const [jobs, total] = await Promise.all([
     Job.find(jobQuery)
-      .populate('company', 'name logo website platform boardUrl')
+      .populate('company', 'name logo website platform boardUrl hasWhiteBg')
       .sort({ postedAt: -1 })
       .skip(skip)
       .limit(Number(limit))
       .lean(),
     Job.countDocuments(jobQuery),
   ]);
+
+  // Apply Free vs Paid user apply gating:
+  // For free users, only the 5 oldest jobs for this company are unlocked.
+  if (!isPaidOrAdmin) {
+    const oldestFilter = {
+      isActive: true,
+      isReviewed: true,
+      ...(company
+        ? {
+            $or: [
+              { company: company._id },
+              { companyTag: company.slug },
+              { companyName: new RegExp('^' + company.name + '$', 'i') },
+            ],
+          }
+        : {
+            $or: [
+              { companyTag: slugOrId.toLowerCase() },
+              { companyName: new RegExp('^' + slugOrId + '$', 'i') },
+            ],
+          }),
+    };
+
+    const oldestJobs = await Job.find(oldestFilter)
+      .sort({ postedAt: 1, createdAt: 1 })
+      .limit(5)
+      .select('_id')
+      .lean();
+
+    const unlockedSet = new Set(oldestJobs.map(oj => oj._id.toString()));
+
+    jobs.forEach(j => {
+      j.isLocked = !unlockedSet.has(j._id.toString());
+      if (j.isLocked) {
+        j.applyLink = null;
+        j.applyEmail = null;
+        j.contactPhone = null;
+      }
+    });
+  } else {
+    jobs.forEach(j => {
+      j.isLocked = false;
+    });
+  }
 
   return ApiResponse.paginated(
     res,

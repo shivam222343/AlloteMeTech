@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Banknote, ExternalLink, Mail, Phone, Lock } from 'lucide-react';
+import { MapPin, Banknote, ExternalLink, Mail, Phone, Lock, CheckCircle2 } from 'lucide-react';
 import { WhatsAppIcon, formatJobForWhatsApp, shareOnWhatsApp, formatTimeAgo } from './whatsappHelper';
 import { useJobApply } from './useJobApply';
 
-const isValidCompanyLogo = (url) => {
+export const isValidCompanyLogo = (url) => {
   if (!url || typeof url !== 'string') return false;
   const clean = url.trim().toLowerCase();
-  if (!clean.startsWith('http://') && !clean.startsWith('https://')) return false;
-  return !/google\.com\/s2\/favicons|bing\.com|linkedin|instagram|whatsapp|facebook|twitter|youtube|googleusercontent|avatar|og-image|open%20graph|landingpage/i.test(clean);
+  if (!clean.startsWith('http://') && !clean.startsWith('https://') && !clean.startsWith('data:image/')) return false;
+  // Filter out 16px google favicon fetchers
+  if (clean.includes('google.com/s2/favicons') && clean.includes('sz=16')) return false;
+  return true;
 };
 
 const TYPE_COLORS = {
@@ -29,13 +31,12 @@ export const formatCompanyName = (job) => {
   if (job?.company?.name && job.company.name.trim()) return job.company.name.trim();
   const raw = (job?.companyName || job?.companyTag || '').trim();
   if (!raw) return 'Company';
-  // If it's all lowercase or slug-like, prettify it (e.g. "freechargebiz" -> "Freechargebiz", "tech-alloteme" -> "Tech Alloteme")
-  if (raw === raw.toLowerCase()) {
-    return raw
-      .replace(/[-_]+/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-  return raw;
+  // If it contains spaces or uppercase, it is already an original formatted name
+  if (raw !== raw.toLowerCase() || raw.includes(' ')) return raw;
+  // If it's a slug, capitalize words cleanly
+  return raw
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
 export default function JobCard({
@@ -54,7 +55,6 @@ export default function JobCard({
     : (job.companyLogo || '');
 
   const companyLogo = isValidCompanyLogo(rawLogo) ? rawLogo : '';
-
   const companyName = formatCompanyName(job);
   const slug = job.slug;
 
@@ -65,6 +65,22 @@ export default function JobCard({
   // Company email: only genuine company email, never hiredoor or alloteme
   const rawEmail = (job.applyEmail || (rawApplyLink.startsWith('mailto:') ? rawApplyLink.replace(/^mailto:/i, '').split('?')[0].trim() : '')).trim();
   const email = (rawEmail && !rawEmail.toLowerCase().includes('hiredoor') && !rawEmail.toLowerCase().includes('alloteme')) ? rawEmail : '';
+
+  const isLocked = Boolean(job.isLocked);
+
+  const handleOpenSubscription = (e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    window.dispatchEvent(
+      new CustomEvent('open-premium-modal', {
+        detail: {
+          message: 'Unlock latest jobs! Free users can only access the 5 oldest archived jobs per company. Upgrade to Premium to instantly apply to all newly posted jobs!',
+        },
+      })
+    );
+  };
 
   return (
     <div
@@ -112,8 +128,31 @@ export default function JobCard({
             {job.title}
           </h3>
         </div>
-        <span className="text-xs text-text-faint flex-shrink-0">{formatTimeAgo(job.postedAt || job.createdAt)}</span>
+
+        {/* Time display: Admins see Posted + Scraped. Users see ONLY Scraped time */}
+        <div className="text-right flex-shrink-0">
+          {isAdmin ? (
+            <div className="text-[11px] text-text-faint leading-tight space-y-0.5">
+              <div>Posted: {formatTimeAgo(job.postedAt || job.createdAt)}</div>
+              <div className="text-accent-blue font-medium">Scraped: {formatTimeAgo(job.scrapedAt || job.createdAt)}</div>
+            </div>
+          ) : (
+            <span className="text-xs text-text-faint">
+              Scraped {formatTimeAgo(job.scrapedAt || job.createdAt)}
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Verified Badge by Tech AlloteMe */}
+      {job.isReviewed && (
+        <div className="flex items-center">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shadow-sm">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+            Verified by Tech AlloteMe
+          </span>
+        </div>
+      )}
 
       {/* Tags row */}
       <div className="flex flex-wrap gap-1.5 items-center">
@@ -159,6 +198,11 @@ export default function JobCard({
               href={`mailto:${email}`}
               className="truncate hover:underline"
               onClick={e => {
+                if (isLocked) {
+                  e.preventDefault();
+                  handleOpenSubscription(e);
+                  return;
+                }
                 if (!user) {
                   e.preventDefault();
                   e.stopPropagation();
@@ -180,7 +224,14 @@ export default function JobCard({
             <a
               href={`tel:${job.contactPhone}`}
               className="truncate hover:underline"
-              onClick={e => e.stopPropagation()}
+              onClick={e => {
+                if (isLocked) {
+                  e.preventDefault();
+                  handleOpenSubscription(e);
+                  return;
+                }
+                e.stopPropagation();
+              }}
             >
               {job.contactPhone}
             </a>
@@ -210,8 +261,18 @@ export default function JobCard({
             <WhatsAppIcon className="w-4 h-4 fill-[#25D366]" />
           </button>
 
-          {/* Apply button with daily limit & lock (Direct company link or Company email only, NEVER hiredoor) */}
-          {hasReachedLimit ? (
+          {/* Gating: If job is locked for free user, show Take Subscription */}
+          {isLocked ? (
+            <button
+              type="button"
+              onClick={handleOpenSubscription}
+              className="btn btn-sm px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold hover:brightness-110 shadow-sm flex items-center gap-1.5 cursor-pointer rounded-lg text-xs"
+              title="Locked for free users. Upgrade to Premium to apply."
+            >
+              <span>Take Subscription</span>
+              <span className="text-xs">👑</span>
+            </button>
+          ) : hasReachedLimit ? (
             <button
               type="button"
               onClick={(e) => handleApply(e, job)}

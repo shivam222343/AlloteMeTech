@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { jobsApi } from '../api';
 import Spinner from '../components/common/Spinner';
+import { useAuth } from '../context/AuthContext';
 import {
   WhatsAppIcon,
   formatJobForWhatsApp,
@@ -31,10 +32,9 @@ function timeAgo(date) {
 const isValidCompanyLogo = (url) => {
   if (!url || typeof url !== 'string') return false;
   const clean = url.trim().toLowerCase();
-  if (!clean.startsWith('http://') && !clean.startsWith('https://')) return false;
-  return !/google\.com\/s2\/favicons|bing\.com|linkedin|instagram|whatsapp|facebook|twitter|youtube|googleusercontent|avatar|og-image|open%20graph|landingpage/i.test(
-    clean
-  );
+  if (!clean.startsWith('http://') && !clean.startsWith('https://') && !clean.startsWith('data:image/')) return false;
+  if (clean.includes('google.com/s2/favicons') && clean.includes('sz=16')) return false;
+  return true;
 };
 
 // Helper to decode HTML entities
@@ -154,6 +154,7 @@ function parseClientJobContent(rawInput) {
 export default function JobDetail() {
   const { slug } = useParams();
   const { user, hasReachedLimit, handleApply } = useJobApply();
+  const { isAdmin } = useAuth();
   const [imgError, setImgError] = useState(false);
   const { data, isLoading, isError } = useQuery({
     queryKey: ['job', slug],
@@ -172,7 +173,7 @@ export default function JobDetail() {
   if (isError || !job)
     return (
       <div className="max-w-3xl mx-auto px-4 py-20 text-center">
-        <p className="text-text-muted">Job not found</p>
+        <p className="text-text-muted">Job not found or pending admin review</p>
         <Link to="/jobs" className="btn btn-ghost btn-sm mt-4">
           ← Back to Jobs
         </Link>
@@ -202,6 +203,21 @@ export default function JobDetail() {
       ? rawApplyLink.replace(/^mailto:/i, '').split('?')[0].trim()
       : '';
   const canApply = hasDirectCompanyLink || !!companyEmail;
+  const isLocked = Boolean(job.isLocked);
+
+  const handleOpenSubscription = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    window.dispatchEvent(
+      new CustomEvent('open-premium-modal', {
+        detail: {
+          message: 'Unlock latest jobs! Free users can only access the 5 oldest archived jobs per company. Upgrade to Premium to instantly apply to all newly posted jobs!',
+        },
+      })
+    );
+  };
 
   // Process structured sections
   let cleanDesc = job.description || '';
@@ -309,9 +325,29 @@ export default function JobDetail() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-text-faint mt-2">
-              Posted {timeAgo(job.postedAt || job.createdAt)}
-            </p>
+
+            {/* Verified badge */}
+            {job.isReviewed && (
+              <div className="mt-2.5 flex items-center">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shadow-sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                  Verified by Tech AlloteMe
+                </span>
+              </div>
+            )}
+
+            {/* Time: Admin sees Posted + Scraped. Users see ONLY Scraped time */}
+            <div className="text-xs text-text-faint mt-2">
+              {isAdmin ? (
+                <span className="space-x-1.5">
+                  <span>Posted: {timeAgo(job.postedAt || job.createdAt)}</span>
+                  <span>·</span>
+                  <span className="text-accent-blue font-medium">Scraped: {timeAgo(job.scrapedAt || job.createdAt)}</span>
+                </span>
+              ) : (
+                <span>Scraped {timeAgo(job.scrapedAt || job.createdAt)}</span>
+              )}
+            </div>
           </div>
           <div className="hidden sm:flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
@@ -325,7 +361,17 @@ export default function JobDetail() {
               >
                 <WhatsAppIcon className="w-4 h-4 fill-[#25D366]" /> Share
               </button>
-              {canApply &&
+              {isLocked ? (
+                <button
+                  type="button"
+                  onClick={handleOpenSubscription}
+                  className="btn btn-sm px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold hover:brightness-110 shadow-sm flex items-center gap-1.5 cursor-pointer rounded-lg text-xs"
+                  title="Locked for free users. Upgrade to Premium to apply."
+                >
+                  <span>Take Subscription</span>
+                  <span className="text-xs">👑</span>
+                </button>
+              ) : canApply &&
                 (hasReachedLimit ? (
                   <button
                     type="button"
@@ -353,7 +399,7 @@ export default function JobDetail() {
                   </button>
                 ))}
             </div>
-            {companyEmail && (
+            {companyEmail && !isLocked && (
               <a
                 href={`mailto:${companyEmail}`}
                 onClick={(e) => {
@@ -436,7 +482,17 @@ export default function JobDetail() {
           >
             <WhatsAppIcon className="w-4 h-4 fill-[#25D366]" /> Share
           </button>
-          {canApply &&
+          {isLocked ? (
+            <button
+              type="button"
+              onClick={handleOpenSubscription}
+              className="btn btn-sm flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold hover:brightness-110 shadow-sm flex items-center justify-center gap-1.5 cursor-pointer rounded-lg text-xs"
+              title="Locked for free users. Upgrade to Premium to apply."
+            >
+              <span>Take Subscription</span>
+              <span className="text-xs">👑</span>
+            </button>
+          ) : canApply &&
             (hasReachedLimit ? (
               <button
                 type="button"
