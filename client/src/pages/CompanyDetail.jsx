@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { companiesApi, progressApi } from '../api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { companiesApi, progressApi, jobsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import ProblemTable from '../components/problem/ProblemTable';
 import ProblemFilters from '../components/problem/ProblemFilters';
@@ -23,11 +23,20 @@ import {
   Radio,
   CheckCircle2,
   Building2,
+  Trash2,
+  Copy,
+  Loader2,
 } from 'lucide-react';
 import { formatRelativeTime } from '../utils/helpers';
 import PremiumButton from '../components/common/PremiumButton';
 import JobsPremiumBanner from '../components/jobs/JobsPremiumBanner';
 import { useJobApply } from '../components/jobs/useJobApply';
+import {
+  WhatsAppIcon,
+  formatJobForWhatsApp,
+  formatMultipleJobsForWhatsApp,
+  shareOnWhatsApp,
+} from '../components/jobs/whatsappHelper';
 import toast from 'react-hot-toast';
 
 const DATE_OPTIONS = [
@@ -130,6 +139,113 @@ export default function CompanyDetail() {
 
   const jobsList = jobsRes?.data?.data || [];
   const jobsPagination = jobsRes?.data?.pagination || { page: 1, limit: 20, total: 0, pages: 1 };
+
+  // Admin Job Selection & WhatsApp / Bulk Delete actions
+  const [selectedJobIds, setSelectedJobIds] = useState(new Set());
+
+  const handleToggleSelectJob = (id) => {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const isAllPageSelected = jobsList.length > 0 && jobsList.every((j) => selectedJobIds.has(j._id));
+
+  const toggleSelectAllPage = () => {
+    if (isAllPageSelected) {
+      setSelectedJobIds((prev) => {
+        const next = new Set(prev);
+        jobsList.forEach((j) => next.delete(j._id));
+        return next;
+      });
+    } else {
+      setSelectedJobIds((prev) => {
+        const next = new Set(prev);
+        jobsList.forEach((j) => next.add(j._id));
+        return next;
+      });
+    }
+  };
+
+  const selectedJobs = jobsList
+    .filter((j) => selectedJobIds.has(j._id))
+    .map((j) => ({ ...j, companyName: company?.name || j.companyName }));
+
+  // WhatsApp share selected jobs
+  const handleShareSelectedWhatsApp = () => {
+    if (selectedJobs.length === 0) return;
+    const text =
+      selectedJobs.length === 1
+        ? formatJobForWhatsApp(selectedJobs[0], null, { isUserShare: false })
+        : formatMultipleJobsForWhatsApp(selectedJobs, { isUserShare: false });
+
+    navigator.clipboard.writeText(text).catch(() => {});
+    shareOnWhatsApp(text);
+    toast.success(`Opening WhatsApp with ${selectedJobs.length} job(s) from ${company?.name || 'Company'}!`);
+  };
+
+  // Copy WhatsApp draft
+  const handleCopySelectedWhatsApp = () => {
+    if (selectedJobs.length === 0) return;
+    const text =
+      selectedJobs.length === 1
+        ? formatJobForWhatsApp(selectedJobs[0], null, { isUserShare: false })
+        : formatMultipleJobsForWhatsApp(selectedJobs, { isUserShare: false });
+
+    navigator.clipboard
+      .writeText(text)
+      .then(() => toast.success(`Copied WhatsApp draft for ${selectedJobs.length} job(s) to clipboard!`))
+      .catch(() => toast.error('Failed to copy text'));
+  };
+
+  // Single job WhatsApp share
+  const handleShareSingleWhatsApp = (job) => {
+    const jobWithCompany = { ...job, companyName: company?.name || job.companyName };
+    const text = formatJobForWhatsApp(jobWithCompany, null, { isUserShare: false });
+    navigator.clipboard.writeText(text).catch(() => {});
+    shareOnWhatsApp(text);
+    toast.success(`Opening WhatsApp for ${job.title}!`);
+  };
+
+  // Delete mutations
+  const deleteJobMutation = useMutation({
+    mutationFn: (id) => jobsApi.delete(id),
+    onSuccess: () => {
+      toast.success('Job deleted successfully');
+      qc.invalidateQueries(['company-jobs', slug]);
+      qc.invalidateQueries(['company', slug]);
+      refetchJobs();
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to delete job'),
+  });
+
+  const handleDeleteSingleJob = (job) => {
+    if (window.confirm(`Are you sure you want to delete "${job.title}"?`)) {
+      deleteJobMutation.mutate(job._id);
+    }
+  };
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids) => jobsApi.bulkDelete(ids),
+    onSuccess: (res) => {
+      toast.success(res?.data?.message || `Deleted ${selectedJobIds.size} jobs`);
+      setSelectedJobIds(new Set());
+      qc.invalidateQueries(['company-jobs', slug]);
+      qc.invalidateQueries(['company', slug]);
+      refetchJobs();
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Bulk delete failed'),
+  });
+
+  const handleBulkDelete = () => {
+    if (selectedJobIds.size === 0) return;
+    if (window.confirm(`Are you sure you want to delete ${selectedJobIds.size} selected job(s) from ${company?.name || 'this company'}?`)) {
+      bulkDeleteMutation.mutate(Array.from(selectedJobIds));
+    }
+  };
 
   // 3. Fetch Problems (Interview Prep)
   const { data: problemsData, isLoading: problemsLoading } = useQuery({
@@ -457,14 +573,114 @@ export default function CompanyDetail() {
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Sticky Bulk Selection Bar for Admin */}
+              {isAdmin && selectedJobIds.size > 0 && (
+                <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 p-3 bg-bg-card border-2 border-[#25D366]/40 rounded-xl shadow-lg animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-[#25D366]/20 text-[#25D366] font-bold text-xs flex items-center justify-center">
+                      {selectedJobIds.size}
+                    </span>
+                    <span className="text-sm font-semibold text-text-primary">
+                      {selectedJobIds.size} {selectedJobIds.size === 1 ? 'job' : 'jobs'} selected
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleShareSelectedWhatsApp}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#25D366] hover:bg-[#20ba5a] transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                    >
+                      <WhatsAppIcon className="w-4 h-4 fill-white" />
+                      <span>Share on WhatsApp</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCopySelectedWhatsApp}
+                      className="btn btn-ghost btn-sm text-xs flex items-center gap-1.5 cursor-pointer"
+                      title="Copy formatted WhatsApp draft to clipboard"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Draft</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleBulkDelete}
+                      disabled={bulkDeleteMutation.isPending}
+                      className="btn btn-ghost btn-sm text-xs text-accent-red hover:bg-accent-red/10 flex items-center gap-1.5 border border-accent-red/20 cursor-pointer"
+                      title="Permanently delete selected jobs"
+                    >
+                      {bulkDeleteMutation.isPending ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>Delete Selected ({selectedJobIds.size})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedJobIds(new Set())}
+                      className="btn btn-ghost btn-sm text-xs text-text-muted hover:text-accent-red cursor-pointer"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Select All on Page Bar for Admin */}
+              {isAdmin && jobsList.length > 0 && (
+                <div className="flex items-center justify-between px-3 py-2 bg-bg-secondary rounded-lg border border-border text-xs text-text-muted">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={isAllPageSelected}
+                      onChange={toggleSelectAllPage}
+                      className="w-4 h-4 rounded border-border text-accent-blue cursor-pointer accent-accent-blue"
+                    />
+                    <span className="font-medium text-text-secondary">
+                      Select all on this page ({jobsList.length})
+                    </span>
+                  </label>
+                  {selectedJobIds.size > 0 && (
+                    <span className="text-[#25D366] font-semibold text-xs">
+                      {selectedJobIds.size} selected for WhatsApp / Delete
+                    </span>
+                  )}
+                </div>
+              )}
+
               {jobsList.map((job) => {
                 const applyUrl = job.applyLink || job.sourceUrl || company.boardUrl;
+                const isSelected = selectedJobIds.has(job._id);
                 return (
                   <div
                     key={job._id}
-                    className="card p-4 hover:border-accent-blue/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    className={`card p-4 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                      isSelected
+                        ? 'border-accent-blue bg-accent-blue/5 shadow-[0_0_15px_rgba(59,130,246,0.18)] ring-1 ring-accent-blue/50'
+                        : 'hover:border-accent-blue/40'
+                    }`}
                   >
                     <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                      {isAdmin && (
+                        <div
+                          className="pt-1 flex-shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectJob(job._id)}
+                            className="w-4 h-4 rounded border-border text-accent-blue focus:ring-accent-blue/30 cursor-pointer accent-accent-blue"
+                            title="Select job for WhatsApp share or delete"
+                          />
+                        </div>
+                      )}
+
                       <div className="relative flex-shrink-0">
                         <div className="w-10 h-10 rounded-lg overflow-hidden bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center p-1">
                           {company.logo ? (
@@ -552,13 +768,38 @@ export default function CompanyDetail() {
                     </div>
                   </div>
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
                       <Link
                         to={`/jobs/${job.slug}`}
                         className="btn btn-secondary btn-sm text-xs"
                       >
                         View Details
                       </Link>
+
+                      {/* Admin Quick Action: Single WhatsApp Share & Delete */}
+                      {isAdmin && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleShareSingleWhatsApp(job)}
+                            className="p-1.5 rounded-lg text-[#25D366] hover:bg-[#25D366]/10 transition-colors border border-[#25D366]/25 cursor-pointer"
+                            title="Share on WhatsApp"
+                          >
+                            <WhatsAppIcon className="w-4 h-4 fill-[#25D366]" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSingleJob(job)}
+                            disabled={deleteJobMutation.isPending}
+                            className="p-1.5 rounded-lg text-accent-red hover:bg-accent-red/10 transition-colors border border-accent-red/20 cursor-pointer"
+                            title="Delete this job"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* User apply or subscribe button */}
                       {job.isLocked ? (
                         <button
                           type="button"
