@@ -25,10 +25,13 @@ import {
   Radio,
   FileText,
   SlidersHorizontal,
+  Terminal,
+  Zap,
 } from 'lucide-react';
-import { companiesApi } from '../../api';
+import { companiesApi, jobsApi } from '../../api';
 import toast from 'react-hot-toast';
 import Spinner from '../../components/common/Spinner';
+import LiveSyncTerminal from '../../components/jobs/LiveSyncTerminal';
 
 const ALPHABET = ['All', '#', ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))];
 
@@ -83,6 +86,12 @@ export default function AdminCompanies() {
   // Selection
   const [selectedIds, setSelectedIds] = useState(new Set());
 
+  // Live Terminal & Scraper state
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [syncState, setSyncState] = useState(null);
+  const [syncLogs, setSyncLogs] = useState([]);
+  const [stoppingSync, setStoppingSync] = useState(false);
+
   // Modals
   const [syncModalTarget, setSyncModalTarget] = useState(null); // single company doc OR 'global'
   const [syncOptions, setSyncOptions] = useState({
@@ -92,6 +101,40 @@ export default function AdminCompanies() {
   });
   const [isSyncing, setIsSyncing] = useState(false);
   const [globalProgress, setGlobalProgress] = useState(null);
+
+  // Poll sync status & live terminal logs when scraping is active or terminal is open
+  useEffect(() => {
+    let intervalId;
+    const pollStatus = async () => {
+      try {
+        const res = await jobsApi.getSyncStatus();
+        const data = res?.data?.data;
+        if (data) {
+          if (data.state) {
+            setSyncState(data.state);
+            const active = Boolean(data.state.isActive);
+            setIsSyncing(active);
+            if (!active && isSyncing) {
+              qc.invalidateQueries(['admin-companies']);
+            }
+          }
+          if (Array.isArray(data.logs)) {
+            setSyncLogs(data.logs);
+          }
+        }
+      } catch (e) {
+        // silent
+      }
+    };
+
+    if (isSyncing || terminalOpen) {
+      pollStatus();
+      intervalId = setInterval(pollStatus, 1200);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isSyncing, terminalOpen, qc]);
 
   // Edit Modal
   const [editingCompany, setEditingCompany] = useState(null);
@@ -234,7 +277,8 @@ export default function AdminCompanies() {
     }
 
     setIsSyncing(true);
-    setGlobalProgress({ current: 0, total: ids.length, saved: 0, errors: 0 });
+    setTerminalOpen(true);
+    setSyncModalTarget(null);
 
     try {
       const res = await companiesApi.globalSync({
@@ -242,20 +286,26 @@ export default function AdminCompanies() {
         ...syncOptions,
       });
 
-      const summary = res.data?.data;
       toast.success(
-        `Global Sync Complete: +${summary?.totalSaved || 0} new jobs saved across ${summary?.processedCount || ids.length} companies!`,
-        { duration: 6000 }
+        res.data?.message || `Global ATS scrape started for ${ids.length} companies! Live terminal opened.`,
+        { duration: 5000 }
       );
-      qc.invalidateQueries(['admin-companies']);
-      qc.invalidateQueries(['admin-jobs']);
-      setSyncModalTarget(null);
       clearSelection();
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Global sync failed');
-    } finally {
       setIsSyncing(false);
-      setGlobalProgress(null);
+    }
+  };
+
+  const handleStopSync = async () => {
+    setStoppingSync(true);
+    try {
+      await jobsApi.stopSync();
+      toast('Stopping global scraper...', { icon: '🛑' });
+    } catch (err) {
+      toast.error('Failed to request stop');
+    } finally {
+      setStoppingSync(false);
     }
   };
 
@@ -366,21 +416,63 @@ export default function AdminCompanies() {
 
   return (
     <div className="space-y-6">
+      {/* Live Terminal Modal */}
+      <LiveSyncTerminal
+        isOpen={terminalOpen}
+        onClose={() => setTerminalOpen(false)}
+        syncState={syncState}
+        syncLogs={syncLogs}
+        syncing={isSyncing}
+        onStopSync={handleStopSync}
+        stoppingSync={stoppingSync}
+        title="global-ats-scraper@alloteme:~"
+      />
+
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <Building2 className="w-6 h-6 text-accent-blue" />
             <h1 className="text-xl sm:text-2xl font-bold text-text-primary">
-              Companies & ATS Job Boards
+              Companies &amp; ATS Job Boards
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-text-muted mt-1">
-            Directory of 12,000+ companies across Greenhouse, Ashby, Lever, Workday, Workable, and more with live sync & daily scheduler.
+            Directory of 12,000+ companies across Greenhouse, Ashby, Lever, Workday, Workable, and more with live sync &amp; daily scheduler.
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              setSyncOptions({
+                postedWithinDays: '2',
+                experienceFilter: '0_1',
+                categoryFilter: 'Tech',
+              });
+              setSyncModalTarget('global');
+            }}
+            disabled={isSyncing}
+            className="btn btn-sm px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-accent-blue via-indigo-600 to-purple-600 hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
+            title="Global ATS scrape for 0-1 years experience (last 2 days)"
+          >
+            <Zap className="w-4 h-4 text-amber-300" />
+            <span>0-1 Yrs Global Scrape (2 Days)</span>
+            {isSyncing && <span className="w-2 h-2 rounded-full bg-amber-300 animate-ping ml-1" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTerminalOpen(true)}
+            className="btn btn-ghost btn-sm px-3 py-1.5 rounded-xl border border-border text-xs font-mono flex items-center gap-1.5 cursor-pointer text-text-secondary hover:text-text-primary"
+            title="Open Live Terminal"
+          >
+            <Terminal className="w-3.5 h-3.5 text-accent-green" />
+            <span>Live Terminal</span>
+            {isSyncing && <span className="w-2 h-2 rounded-full bg-accent-green animate-pulse" />}
+          </button>
+
           <button
             onClick={() => {
               fetchSchedulerSettings();
@@ -400,7 +492,7 @@ export default function AdminCompanies() {
               className="btn btn-primary btn-sm flex items-center gap-2 shadow-md animate-pulse"
             >
               <RefreshCw className="w-4 h-4" />
-              <span>Global Sync ({selectedIds.size} Selected)</span>
+              <span>Sync Selected ({selectedIds.size})</span>
             </button>
           )}
         </div>

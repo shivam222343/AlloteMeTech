@@ -238,7 +238,7 @@ const Discussion = () => {
   let lastDateHeader = null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 flex flex-col" style={{ height: 'calc(100vh - 4rem)' }}>
+    <div className="max-w-4xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-6 flex flex-col flex-1 h-full min-h-0">
       {/* Header - responsive flex layout */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 flex-shrink-0">
         <div className="flex items-center gap-3">

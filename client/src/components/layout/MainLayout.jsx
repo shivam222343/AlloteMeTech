@@ -58,9 +58,9 @@ const MainLayout = () => {
 
         {/* Content Viewport with independent smooth scrolling */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-          <main className="flex-1 overflow-y-auto min-w-0 admin-scroll">
+          <main className={`flex-1 min-w-0 ${location.pathname === '/discussion' ? 'flex flex-col overflow-hidden h-full' : 'overflow-y-auto admin-scroll'}`}>
             <Outlet />
-            <Footer />
+            {location.pathname !== '/discussion' && <Footer />}
           </main>
         </div>
       </div>

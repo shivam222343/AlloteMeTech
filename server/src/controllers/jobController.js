@@ -2142,3 +2142,29 @@ exports.trackJobApply = async (req, res) => {
     allowed: true,
   });
 };
+
+// ── Shared Scraper Terminal Helpers for ATS & HireDoor ────────────────────────
+exports.logScraper = logScraper;
+exports.getActiveSyncState = () => activeSyncState;
+exports.getActiveSyncLogs = () => activeSyncLogs;
+exports.getIsSyncCancelled = () => isSyncCancelled;
+exports.setIsSyncCancelled = (val) => { isSyncCancelled = Boolean(val); };
+exports.resetSyncSession = (initialState = {}) => {
+  activeSyncLogs.length = 0;
+  isSyncCancelled = false;
+  Object.keys(activeSyncState).forEach((k) => delete activeSyncState[k]);
+  Object.assign(activeSyncState, {
+    isActive: true,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    totalToScrape: 0,
+    processedCount: 0,
+    savedCount: 0,
+    duplicateCount: 0,
+    errorsCount: 0,
+    currentStep: '',
+    message: '',
+    ...initialState,
+  });
+};

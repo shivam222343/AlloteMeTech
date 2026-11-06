@@ -44,7 +44,7 @@ const Navbar = ({ onToggleSidebar }) => {
   };
 
   return (
-    <header ref={mobileRef} className="sticky top-0 z-40 border-b border-border backdrop-blur-sm" style={{ backgroundColor: 'color-mix(in srgb, var(--bg-primary) 95%, transparent)' }}>
+    <header ref={mobileRef} className="sticky top-0 z-40 border-b border-border backdrop-blur-sm flex-shrink-0" style={{ backgroundColor: 'color-mix(in srgb, var(--bg-primary) 95%, transparent)' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}

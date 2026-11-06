@@ -1,11 +1,25 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { companiesApi } from '../api';
-import { Search, Building2, ChevronRight } from 'lucide-react';
+import { companiesApi, jobsApi } from '../api';
+import {
+  Search,
+  Building2,
+  ChevronRight,
+  Zap,
+  Terminal,
+  X,
+  Play,
+  SlidersHorizontal,
+  CheckCircle2,
+  AlertCircle,
+} from 'lucide-react';
 import Spinner from '../components/common/Spinner';
 import { formatRelativeTime } from '../utils/helpers';
 import ContinueLearningRecommendation from '../components/common/ContinueLearningRecommendation';
+import { useAuth } from '../context/AuthContext';
+import LiveSyncTerminal from '../components/jobs/LiveSyncTerminal';
+import toast from 'react-hot-toast';
 
 const SORT_OPTIONS = [
   { value: 'name', label: 'Alphabetical' },
@@ -60,10 +74,91 @@ const CompanyCard = ({ company }) => (
 );
 
 const Companies = () => {
+  const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
+
   const [search, setSearch] = useState('');
   const [startingWith, setStartingWith] = useState('');
   const [sort, setSort] = useState('name');
   const [page, setPage] = useState(1);
+
+  // Scraper Terminal & Modal state for Admin
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [syncState, setSyncState] = useState(null);
+  const [syncLogs, setSyncLogs] = useState([]);
+  const [syncing, setSyncing] = useState(false);
+  const [stoppingSync, setStoppingSync] = useState(false);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [categoryChoice, setCategoryChoice] = useState('Tech');
+
+  // Poll sync status & live terminal logs when scraping is active or terminal is open
+  useEffect(() => {
+    let intervalId;
+    const pollStatus = async () => {
+      try {
+        const res = await jobsApi.getSyncStatus();
+        const data = res?.data?.data;
+        if (data) {
+          if (data.state) {
+            setSyncState(data.state);
+            const active = Boolean(data.state.isActive);
+            setSyncing(active);
+            if (!active && syncing) {
+              queryClient.invalidateQueries(['companies']);
+            }
+          }
+          if (Array.isArray(data.logs)) {
+            setSyncLogs(data.logs);
+          }
+        }
+      } catch (e) {
+        // silent
+      }
+    };
+
+    if (syncing || terminalOpen) {
+      pollStatus();
+      intervalId = setInterval(pollStatus, 1200);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [syncing, terminalOpen, queryClient]);
+
+  const handleStartGlobalScrape = async () => {
+    try {
+      setConfirmModalOpen(false);
+      setSyncing(true);
+      setTerminalOpen(true);
+
+      const res = await companiesApi.globalSync({
+        syncAll: true,
+        postedWithinDays: '2',
+        experienceFilter: '0_1',
+        categoryFilter: categoryChoice,
+      });
+
+      toast.success(
+        res?.data?.message || 'Started Global ATS scrape for 0-1 years experience (last 2 days)!',
+        { duration: 5000 }
+      );
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to start global scrape');
+      setSyncing(false);
+    }
+  };
+
+  const handleStopSync = async () => {
+    setStoppingSync(true);
+    try {
+      await jobsApi.stopSync();
+      toast('Stopping global scraper...', { icon: '🛑' });
+    } catch (err) {
+      toast.error('Failed to request stop');
+    } finally {
+      setStoppingSync(false);
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['companies', { search, startingWith, sort, page }],
@@ -76,15 +171,146 @@ const Companies = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      {/* Live Terminal Modal */}
+      <LiveSyncTerminal
+        isOpen={terminalOpen}
+        onClose={() => setTerminalOpen(false)}
+        syncState={syncState}
+        syncLogs={syncLogs}
+        syncing={syncing}
+        onStopSync={handleStopSync}
+        stoppingSync={stoppingSync}
+        title="global-ats-scraper@alloteme:~"
+      />
+
+      {/* Confirmation & Filter Modal before Global Scrape */}
+      {confirmModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl p-5 space-y-4 text-text-primary">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-accent-blue/10 flex items-center justify-center text-accent-blue">
+                  <Zap className="w-4 h-4 text-amber-300" />
+                </div>
+                <h3 className="font-bold text-base">Global ATS Job Scrape</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmModalOpen(false)}
+                className="btn-icon btn-ghost text-text-muted hover:text-text-primary"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-text-muted leading-relaxed">
+              This will sequentially crawl all registered companies across supported ATS platforms (Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Workday, etc.), automatically filtering out duplicate postings.
+            </p>
+
+            <div className="space-y-3 bg-bg-secondary/60 p-3.5 rounded-xl border border-border/60 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-text-secondary">Experience Requirement:</span>
+                <span className="px-2.5 py-0.5 rounded-full font-bold bg-accent-blue/15 text-accent-blue border border-accent-blue/30">
+                  0 - 1 Years Only (Freshers / Entry / Interns)
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-text-secondary">Posted Window:</span>
+                <span className="px-2.5 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  Last 2 Days (Recent 48 Hours)
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="font-semibold text-text-secondary">Job Category:</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCategoryChoice('Tech')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                      categoryChoice === 'Tech'
+                        ? 'bg-accent-blue text-white shadow-sm'
+                        : 'bg-bg-card border border-border text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    💻 Tech Only
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryChoice('all')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                      categoryChoice === 'all'
+                        ? 'bg-accent-blue text-white shadow-sm'
+                        : 'bg-bg-card border border-border text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    All Roles
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModalOpen(false)}
+                className="btn btn-ghost btn-sm text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleStartGlobalScrape}
+                className="btn btn-primary btn-sm text-xs px-4 py-2 flex items-center gap-2 bg-gradient-to-r from-accent-blue to-indigo-600 font-bold shadow-md cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Start Scrape &amp; View Terminal</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
-          <Building2 className="w-6 h-6 text-accent-blue" />
-          Companies
-        </h1>
-        <p className="text-sm text-text-muted mt-1">
-          Browse {pagination?.total || '—'} companies and their DSA questions (Tech Round + Interview)
-        </p>
+      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
+            <Building2 className="w-6 h-6 text-accent-blue" />
+            Companies Directory
+          </h1>
+          <p className="text-sm text-text-muted mt-1">
+            Browse {pagination?.total || '—'} companies, active career boards, and interview questions
+          </p>
+        </div>
+
+        {/* Admin Global Scrape & Live Terminal Controls */}
+        {isAdmin && (
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setConfirmModalOpen(true)}
+              disabled={syncing}
+              className="btn btn-sm px-3.5 py-2 rounded-xl bg-gradient-to-r from-accent-blue via-indigo-600 to-purple-600 hover:opacity-95 text-white font-bold text-xs flex items-center gap-2 shadow-[0_0_15px_rgba(59,130,246,0.25)] cursor-pointer active:scale-95 transition-all"
+              title="Scrape all companies globally for 0-1 years experience posted in the last 2 days"
+            >
+              <Zap className="w-4 h-4 text-amber-300" />
+              <span>Global ATS Scrape (0-1 Yrs • 2 Days)</span>
+              {syncing && <span className="w-2 h-2 rounded-full bg-amber-300 animate-ping ml-1" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTerminalOpen(true)}
+              className="btn btn-ghost btn-sm px-3 py-2 rounded-xl border border-border text-xs font-mono flex items-center gap-1.5 cursor-pointer text-text-secondary hover:text-text-primary"
+              title="Open Live Terminal to view scraping progress"
+            >
+              <Terminal className="w-3.5 h-3.5 text-accent-green" />
+              <span>Live Terminal</span>
+              {syncing && <span className="w-2 h-2 rounded-full bg-accent-green animate-pulse" />}
+            </button>
+          </div>
+        )}
       </div>
 
       <ContinueLearningRecommendation />

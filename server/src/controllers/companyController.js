@@ -6,6 +6,13 @@ const JobSettings = require('../models/JobSettings');
 const ApiResponse = require('../utils/apiResponse');
 const { syncJobsForCompany, globalSyncCompanies } = require('../services/atsScraperService');
 const { rescheduleDailySync, runAutoSyncNow } = require('../services/atsSchedulerService');
+const {
+  logScraper,
+  getActiveSyncState,
+  resetSyncSession,
+  getIsSyncCancelled,
+  setIsSyncCancelled,
+} = require('./jobController');
 
 // ─── Get All Companies ────────────────────────────────────────────────────────
 exports.getCompanies = async (req, res) => {
@@ -520,30 +527,149 @@ exports.syncSingleCompany = async (req, res) => {
   }
 };
 
-// ─── Admin: Batch Global Sync ─────────────────────────────────────────────────
+// ─── Admin: Batch Global Sync with Live Terminal Logging ───────────────────────
 exports.globalSync = async (req, res) => {
   const {
     companyIds = [],
-    postedWithinDays = 'all',
-    experienceFilter = 'all',
-    categoryFilter = 'all',
+    postedWithinDays = '2',
+    experienceFilter = '0_1',
+    categoryFilter = 'Tech',
+    syncAll = false,
   } = req.body;
 
-  if (!Array.isArray(companyIds) || companyIds.length === 0) {
-    return ApiResponse.badRequest(res, 'Please provide an array of companyIds to sync');
+  let targets = [];
+  if (syncAll || !Array.isArray(companyIds) || companyIds.length === 0) {
+    targets = await Company.find({
+      platform: { $ne: null, $nin: ['', 'none'] },
+      isEnabled: true,
+    }).select('_id name platform slug openRoles');
+  } else {
+    targets = await Company.find({
+      _id: { $in: companyIds },
+      isEnabled: true,
+    }).select('_id name platform slug openRoles');
   }
 
-  try {
-    const summary = await globalSyncCompanies(companyIds, {
-      postedWithinDays,
-      experienceFilter,
-      categoryFilter,
+  if (targets.length === 0) {
+    return ApiResponse.badRequest(res, 'No ATS-supported companies found to scrape.');
+  }
+
+  // Check if a sync session is already active
+  const curState = getActiveSyncState();
+  if (curState && curState.isActive) {
+    return ApiResponse.badRequest(res, 'A scrape session is already in progress. Please wait or stop it first.');
+  }
+
+  // Initialize scraper terminal session
+  resetSyncSession({
+    isActive: true,
+    status: 'running',
+    mode: 'ats_global',
+    category: categoryFilter,
+    totalToScrape: targets.length,
+    processedCount: 0,
+    savedCount: 0,
+    duplicateCount: 0,
+    errorsCount: 0,
+    currentStep: `Starting Global ATS Scraper for ${targets.length} companies [0-1 Yrs Exp | Last 2 Days]...`,
+    message: `Initialized Global ATS Scrape`,
+  });
+
+  logScraper(
+    `=== STARTING GLOBAL ATS SCRAPER [${targets.length} Companies | Exp: 0-1 Yrs | Range: Last 2 Days | Category: ${categoryFilter}] ===`,
+    'step',
+    { isActive: true, status: 'running' }
+  );
+
+  // Respond immediately so client does not time out and can open Live Terminal
+  ApiResponse.success(
+    res,
+    {
+      started: true,
+      totalCompanies: targets.length,
+      filters: { postedWithinDays, experienceFilter, categoryFilter },
+    },
+    `Global ATS scrape started for ${targets.length} companies`
+  );
+
+  // Run in background asynchronously with live terminal logging
+  setImmediate(async () => {
+    let totalSaved = 0;
+    let totalDuplicates = 0;
+    let totalErrors = 0;
+
+    for (let i = 0; i < targets.length; i++) {
+      if (getIsSyncCancelled()) {
+        logScraper('Global ATS scraping cancelled by admin.', 'warn', {
+          isActive: false,
+          status: 'stopped',
+          currentStep: 'Stopped by admin',
+        });
+        break;
+      }
+
+      const comp = targets[i];
+      logScraper(
+        `[${i + 1}/${targets.length}] Scraping ${comp.name} (${(comp.platform || 'ats').toUpperCase()})...`,
+        'info',
+        {
+          processedCount: i + 1,
+          currentStep: `Scraping ${comp.name} (${comp.platform || 'ats'}) [${i + 1}/${targets.length}]`,
+        }
+      );
+
+      try {
+        const syncRes = await syncJobsForCompany(comp, {
+          postedWithinDays,
+          experienceFilter,
+          categoryFilter,
+        });
+
+        totalSaved += syncRes.saved;
+        totalDuplicates += syncRes.skippedDuplicates;
+
+        if (syncRes.saved > 0) {
+          logScraper(
+            `[Saved +${syncRes.saved}] "${comp.name}": +${syncRes.saved} new 0-1 yr jobs added!`,
+            'success',
+            { savedCount: totalSaved, duplicateCount: totalDuplicates }
+          );
+        } else if (syncRes.skippedDuplicates > 0) {
+          logScraper(
+            `[${comp.name}] ${syncRes.skippedDuplicates} duplicate(s) already in DB`,
+            'info',
+            { duplicateCount: totalDuplicates }
+          );
+        } else {
+          logScraper(
+            `[${comp.name}] 0 matching roles found (0-1 yrs exp within last 2 days)`,
+            'info'
+          );
+        }
+
+        // Friendly delay between companies
+        await new Promise((r) => setTimeout(r, 350));
+      } catch (err) {
+        totalErrors++;
+        logScraper(`[${comp.name}] Error: ${err.message}`, 'error', {
+          errorsCount: totalErrors,
+        });
+      }
+    }
+
+    const wasStopped = getIsSyncCancelled();
+    const finalMsg = wasStopped
+      ? `Global scrape stopped by admin. Saved ${totalSaved} jobs across ${targets.length} companies.`
+      : `Global ATS scrape finished! Saved ${totalSaved} new 0-1 yr jobs (${totalDuplicates} duplicates skipped) across ${targets.length} companies.`;
+
+    logScraper(`=== ${finalMsg} ===`, 'step', {
+      isActive: false,
+      status: wasStopped ? 'stopped' : 'completed',
+      endedAt: new Date().toISOString(),
+      currentStep: 'Done',
+      message: finalMsg,
     });
-
-    return ApiResponse.success(res, summary, `Global sync finished: ${summary.totalSaved} jobs saved`);
-  } catch (err) {
-    return ApiResponse.error(res, err.message || 'Global sync failed', 500);
-  }
+  });
 };
 
 // ─── Admin: Update Company Info & Logo (Cascades to Jobs) ─────────────────────
