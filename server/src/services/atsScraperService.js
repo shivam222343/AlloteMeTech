@@ -8,24 +8,173 @@ const DEFAULT_HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   Accept: 'application/json, text/plain, */*',
-  'Accept-Language': 'en-US,en;q=0.9',
 };
+
+// Helper: Decode HTML entities repeatedly
+function decodeHtmlEntities(str) {
+  if (!str || typeof str !== 'string') return '';
+  let prev = '';
+  let curr = str;
+  for (let i = 0; i < 3 && prev !== curr; i++) {
+    prev = curr;
+    curr = curr
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&')
+      .replace(/&nbsp;/g, ' ');
+  }
+  return curr;
+}
+
+// Helper: Convert HTML into clean formatted text with bullets
+function htmlToStructuredText(html) {
+  if (!html || typeof html !== 'string') return '';
+  let text = decodeHtmlEntities(html);
+
+  text = text
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<li>/gi, '\n● ')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<(?:p|div|h[1-6]|tr)>/gi, '\n')
+    .replace(/<\/(?:p|div|h[1-6]|tr)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, ' \n ')
+    .replace(/<\/?[^>]+(>|$)/g, ' ');
+
+  return text;
+}
 
 // Helper: Strip HTML tags
 function stripHtml(html) {
   if (!html || typeof html !== 'string') return '';
-  return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<\/?[^>]+(>|$)/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s\s+/g, ' ')
-    .trim();
+  const text = htmlToStructuredText(html);
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+// Helper: Intelligently Segregate Raw Job Content into About the Role, Responsibilities, Requirements, and Tags
+function parseJobDescription(rawInput, title = '') {
+  const plainText = htmlToStructuredText(rawInput);
+  if (!plainText) {
+    return { description: '', responsibilities: [], requirements: [], tags: [] };
+  }
+
+  const rawLines = plainText.split('\n').map(l => l.trim()).filter(Boolean);
+
+  let currentSection = 'description';
+  const descParagraphs = [];
+  const respItems = [];
+  const reqItems = [];
+
+  const respHeaders = /^(?:key\s+)?responsibilities|what\s+you(?:'ll|\s+will)\s+do|duties|your\s+role|role\s+(?:&|and)\s+responsibilities|scope\s+of\s+work/i;
+  const reqHeaders = /^(?:basic\s+|minimum\s+|preferred\s+)?(?:qualifications|requirements|what\s+we(?:'re|\s+are)\s+looking\s+for|what\s+you(?:'ll|\s+will)\s+need|who\s+you\s+are|skills|ideal\s+candidate|experience)/i;
+  const overviewHeaders = /^(?:position\s+overview|overview|about\s+(?:the\s+)?role|job\s+summary|the\s+opportunity)/i;
+  const companyHeaders = /^(?:about\s+(?:us|[a-z0-9_\s]+)|who\s+we\s+are|company\s+overview|our\s+mission)/i;
+
+  let currentItem = '';
+
+  const flushItem = () => {
+    if (!currentItem) return;
+    const clean = currentItem
+      .replace(/^[●•\*\-\u2022\u2023\u25E6\u2043\u2219\d\.\)]\s*/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (clean && clean.length > 3) {
+      if (currentSection === 'responsibilities') respItems.push(clean);
+      else if (currentSection === 'requirements') reqItems.push(clean);
+    }
+    currentItem = '';
+  };
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    const cleanHeader = line.replace(/^[#*_\-:\s]+|[#*_\-:\s]+$/g, '').trim();
+
+    if (respHeaders.test(cleanHeader)) {
+      flushItem();
+      currentSection = 'responsibilities';
+      continue;
+    } else if (reqHeaders.test(cleanHeader)) {
+      flushItem();
+      currentSection = 'requirements';
+      continue;
+    } else if (companyHeaders.test(cleanHeader)) {
+      flushItem();
+      currentSection = 'about_company';
+      continue;
+    } else if (overviewHeaders.test(cleanHeader)) {
+      flushItem();
+      currentSection = 'description';
+      continue;
+    }
+
+    const isBulletStart = /^[●•\*\-\u2022\u2023\u25E6\u2043\u2219]/.test(line);
+
+    if (currentSection === 'responsibilities' || currentSection === 'requirements') {
+      if (isBulletStart) {
+        flushItem();
+        currentItem = line;
+      } else if (currentItem) {
+        currentItem += ' ' + line;
+      } else {
+        flushItem();
+        currentItem = line;
+      }
+    } else if (currentSection === 'description') {
+      if (!/equal\s+opportunity|diversity\s+and\s+inclusion|all\s+qualified\s+applicants/i.test(line)) {
+        descParagraphs.push(line);
+      }
+    }
+  }
+  flushItem();
+
+  // Extract skills & tags
+  const allText = `${title} ${plainText}`.toLowerCase();
+  const knownTags = [
+    'Python', 'JavaScript', 'TypeScript', 'React', 'Node.js', 'Java', 'C++', 'Golang',
+    'AWS', 'Azure', 'Docker', 'Kubernetes', 'SQL', 'MongoDB', 'PostgreSQL',
+    'Machine Learning', 'AI/ML', 'Deep Learning', 'Data Science', 'Data Analytics',
+    'DevOps', 'CI/CD', 'REST API', 'GraphQL', 'Next.js', 'Tailwind CSS',
+    'Problem Solving', 'CS Fundamentals', 'Communication', 'Fitness', 'Personal Training',
+    'Strength Training', 'CPR/AED', 'Agile', 'Scrum', 'Git', 'Linux'
+  ];
+
+  const extractedTags = [];
+  for (const t of knownTags) {
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escaped}\\b`, 'i').test(allText)) {
+      extractedTags.push(t);
+    }
+  }
+
+  // Join description paragraphs cleanly
+  let cleanDesc = descParagraphs.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+
+  return {
+    description: cleanDesc,
+    responsibilities: respItems,
+    requirements: reqItems,
+    tags: extractedTags,
+  };
+}
+
+function normalizeJobType(val) {
+  if (!val) return 'Full-time';
+  const v = val.toLowerCase().trim();
+  if (v.includes('part')) return 'Part-time';
+  if (v.includes('intern')) return 'Internship';
+  if (v.includes('contract') || v.includes('temp')) return 'Contract';
+  if (v.includes('free')) return 'Freelance';
+  return 'Full-time';
+}
+
+function normalizeWorkMode(val) {
+  if (!val) return 'Remote';
+  const v = val.toLowerCase().trim();
+  if (v.includes('remote') || v.includes('virtual') || v.includes('wfh')) return 'Remote';
+  if (v.includes('hybrid')) return 'Hybrid';
+  return 'On-site';
 }
 
 // Helper: Generate URL slug
@@ -234,36 +383,67 @@ async function fetchWorkdayJobs(company, timeout = 15000) {
 
   const payload = {
     appliedFacets: {},
-    limit: 50,
+    limit: 20,
     offset: 0,
     searchText: '',
   };
 
+  const headers = {
+    Accept: 'application/json, text/plain, */*',
+    'Content-Type': 'application/json',
+    'User-Agent': DEFAULT_HEADERS['User-Agent'],
+  };
+
   const res = await axios.post(company.apiUrl, payload, {
-    headers: { ...DEFAULT_HEADERS, 'Content-Type': 'application/json' },
+    headers,
     timeout,
   });
 
   const rawJobs = res.data?.jobPostings || [];
-  return rawJobs.map((j) => {
+  const baseDetailUrl = company.apiUrl.replace(/\/jobs\/?$/, '');
+
+  const results = [];
+  for (const j of rawJobs) {
     let applyLink = company.boardUrl || '';
     if (j.externalPath) {
       if (applyLink.endsWith('/')) applyLink = applyLink.slice(0, -1);
       applyLink += j.externalPath;
     }
 
-    return {
+    let detailHtml = '';
+    // Fetch detailed job description for first 20 candidate jobs
+    if (j.externalPath && results.length < 20) {
+      try {
+        const detailRes = await axios.get(`${baseDetailUrl}${j.externalPath}`, {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': DEFAULT_HEADERS['User-Agent'],
+          },
+          timeout: 5000,
+        });
+        detailHtml = detailRes.data?.jobPostingInfo?.jobDescription || '';
+      } catch (e) {
+        detailHtml = j.bulletFields ? j.bulletFields.join('\n') : '';
+      }
+    } else {
+      detailHtml = j.bulletFields ? j.bulletFields.join('\n') : '';
+    }
+
+    results.push({
       externalId: String(j.bulletFields?.[0] || j.title || Math.random()),
       title: j.title?.trim() || 'Open Position',
       postedAt: new Date(),
       applyLink: applyLink || company.boardUrl,
       location: j.locationsText || 'Remote',
       workMode: /remote/i.test(j.locationsText || '') ? 'Remote' : 'On-site',
-      jobType: 'Full-time',
+      jobType: j.timeType || 'Full-time',
       department: '',
-      description: j.bulletFields ? j.bulletFields.join(' · ') : '',
-    };
-  });
+      description: detailHtml,
+      rawHtml: detailHtml,
+    });
+  }
+
+  return results;
 }
 
 // 7. Recruitee
@@ -429,31 +609,46 @@ async function syncJobsForCompany(companyIdOrDoc, options = {}) {
       if (cleanTitle) existingTitles.add(cleanTitle);
 
       const slug = generateSlug(rawJob.title);
+      const parsedContent = parseJobDescription(rawJob.rawHtml || rawJob.description || '', rawJob.title);
+
       jobsToInsert.push({
         title: rawJob.title,
         slug,
         category: detectedCategory,
         company: company._id,
-        companyName: company.name, // Always use original formatted company name!
+        companyName: company.name, // Always original formatted company name!
         companyTag: cleanCompanyTag,
         companyLogo: company.logo || '',
         location: rawJob.location || 'Remote',
-        workMode: rawJob.workMode || 'Remote',
-        jobType: rawJob.jobType || 'Full-time',
+        workMode: normalizeWorkMode(rawJob.workMode || rawJob.location),
+        jobType: normalizeJobType(rawJob.jobType),
         salary: rawJob.salary || '',
-        description: rawJob.description || '',
+        description: parsedContent.description || stripHtml(rawJob.description || ''),
+        responsibilities: (rawJob.responsibilities && rawJob.responsibilities.length > 0)
+          ? rawJob.responsibilities
+          : parsedContent.responsibilities,
+        requirements: (rawJob.requirements && rawJob.requirements.length > 0)
+          ? rawJob.requirements
+          : parsedContent.requirements,
+        tags: Array.from(new Set([...(rawJob.tags || []), ...parsedContent.tags])),
         applyLink: rawJob.applyLink,
         source: 'ats',
         sourceUrl: rawJob.applyLink,
         postedAt: rawJob.postedAt || new Date(),
         isActive: true,
       });
-
-      savedCount++;
     }
 
     if (jobsToInsert.length > 0) {
-      await Job.insertMany(jobsToInsert, { ordered: false });
+      try {
+        const inserted = await Job.insertMany(jobsToInsert, { ordered: false });
+        savedCount = inserted.length;
+      } catch (insertErr) {
+        savedCount = insertErr.insertedDocs ? insertErr.insertedDocs.length : 0;
+        console.warn(`[ATS Scraper] Batch insert note for ${company.name}: ${insertErr.message}`);
+      }
+    } else {
+      savedCount = 0;
     }
 
     // Update Company stats
