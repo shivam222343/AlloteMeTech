@@ -35,7 +35,9 @@ const jobSchema = new mongoose.Schema({
 
 jobSchema.index({ title: 'text', companyName: 'text', description: 'text' });
 jobSchema.index({ isActive: 1, postedAt: -1 });
+jobSchema.index({ isActive: 1, isReviewed: 1, reviewedAt: -1, postedAt: -1 });
 jobSchema.index({ category: 1, isActive: 1, postedAt: -1 });
+jobSchema.index({ category: 1, isActive: 1, isReviewed: 1, reviewedAt: -1, postedAt: -1 });
 jobSchema.index({ companyTag: 1 });
 
 module.exports = mongoose.model('Job', jobSchema);

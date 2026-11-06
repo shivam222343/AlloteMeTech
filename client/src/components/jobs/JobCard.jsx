@@ -145,11 +145,11 @@ export default function JobCard({
           {isAdmin ? (
             <div className="text-[11px] text-text-faint leading-tight space-y-0.5">
               <div>Posted {formatTimeAgo(job.postedAt || job.createdAt)}</div>
-              <div className="text-accent-blue font-medium">{formatTimeAgo(job.scrapedAt || job.createdAt)}</div>
+              <div className="text-accent-blue font-medium">{formatTimeAgo(job.reviewedAt || job.scrapedAt || job.createdAt)}</div>
             </div>
           ) : (
-            <span className="text-xs text-text-faint">
-              {formatTimeAgo(job.scrapedAt || job.createdAt)}
+            <span className="text-xs text-text-faint" title={job.reviewedAt ? `Approved ${formatTimeAgo(job.reviewedAt)}` : ''}>
+              {formatTimeAgo(job.reviewedAt || job.scrapedAt || job.createdAt)}
             </span>
           )}
         </div>

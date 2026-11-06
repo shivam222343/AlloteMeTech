@@ -432,7 +432,7 @@ exports.getCompanyJobs = async (req, res) => {
   const [jobs, total] = await Promise.all([
     Job.find(jobQuery)
       .populate('company', 'name logo website platform boardUrl hasWhiteBg')
-      .sort({ postedAt: -1 })
+      .sort({ isFeatured: -1, reviewedAt: -1, postedAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(Number(limit))
       .lean(),

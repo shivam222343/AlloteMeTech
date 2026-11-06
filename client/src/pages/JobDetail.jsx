@@ -349,10 +349,10 @@ export default function JobDetail() {
                 <span className="space-x-1.5">
                   <span>Posted {timeAgo(job.postedAt || job.createdAt)}</span>
                   <span>·</span>
-                  <span className="text-accent-blue font-medium">{timeAgo(job.scrapedAt || job.createdAt)}</span>
+                  <span className="text-accent-blue font-medium">{timeAgo(job.reviewedAt || job.scrapedAt || job.createdAt)}</span>
                 </span>
               ) : (
-                <span>{timeAgo(job.scrapedAt || job.createdAt)}</span>
+                <span>{timeAgo(job.reviewedAt || job.scrapedAt || job.createdAt)}</span>
               )}
             </div>
           </div>
