@@ -23,7 +23,7 @@ const jobSchema = new mongoose.Schema({
   tags: [{ type: String }],
   isActive: { type: Boolean, default: true },
   isFeatured: { type: Boolean, default: false },
-  source: { type: String, enum: ['manual', 'ai', 'scraped'], default: 'manual' },
+  source: { type: String, enum: ['manual', 'ai', 'scraped', 'ats'], default: 'manual' },
   sourceUrl: { type: String, default: '' }, // original URL for scraped jobs
   category: { type: String, enum: ['Tech', 'Non-Tech'], default: 'Tech' },
   scrapedAt: { type: Date, default: null },

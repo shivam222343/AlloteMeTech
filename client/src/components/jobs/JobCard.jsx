@@ -25,6 +25,19 @@ const MODE_COLORS = {
   'On-site': 'text-text-muted bg-bg-secondary',
 };
 
+export const formatCompanyName = (job) => {
+  if (job?.company?.name && job.company.name.trim()) return job.company.name.trim();
+  const raw = (job?.companyName || job?.companyTag || '').trim();
+  if (!raw) return 'Company';
+  // If it's all lowercase or slug-like, prettify it (e.g. "freechargebiz" -> "Freechargebiz", "tech-alloteme" -> "Tech Alloteme")
+  if (raw === raw.toLowerCase()) {
+    return raw
+      .replace(/[-_]+/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return raw;
+};
+
 export default function JobCard({
   job,
   isAdmin = false,
@@ -42,7 +55,7 @@ export default function JobCard({
 
   const companyLogo = isValidCompanyLogo(rawLogo) ? rawLogo : '';
 
-  const companyName = job.company?.name || job.companyName || 'Unknown Company';
+  const companyName = formatCompanyName(job);
   const slug = job.slug;
 
   // Direct company link: must NEVER be hiredoor.in

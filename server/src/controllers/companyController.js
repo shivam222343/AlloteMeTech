@@ -1,6 +1,11 @@
+const mongoose = require('mongoose');
 const Company = require('../models/Company');
 const Problem = require('../models/Problem');
+const Job = require('../models/Job');
+const JobSettings = require('../models/JobSettings');
 const ApiResponse = require('../utils/apiResponse');
+const { syncJobsForCompany, globalSyncCompanies } = require('../services/atsScraperService');
+const { rescheduleDailySync, runAutoSyncNow } = require('../services/atsSchedulerService');
 
 // ─── Get All Companies ────────────────────────────────────────────────────────
 exports.getCompanies = async (req, res) => {
@@ -57,10 +62,11 @@ exports.getCompanies = async (req, res) => {
 
 // ─── Get Single Company ───────────────────────────────────────────────────────
 exports.getCompany = async (req, res) => {
-  const company = await Company.findOne({
-    slug: req.params.slug,
-    isEnabled: true,
-  }).lean();
+  const { slug } = req.params;
+  const isObjectId = mongoose.Types.ObjectId.isValid(slug);
+  const company = await Company.findOne(
+    isObjectId ? { _id: slug } : { slug: slug.toLowerCase() }
+  ).lean();
 
   if (!company) return ApiResponse.notFound(res, 'Company not found');
 
@@ -247,4 +253,376 @@ exports.getCompanyProblems = async (req, res) => {
     },
     'Problems fetched'
   );
+};
+
+// ─── Admin: Get Companies with Full Filters & Stats ──────────────────────────
+exports.getAdminCompanies = async (req, res) => {
+  const {
+    page = 1,
+    limit = 25,
+    search = '',
+    platform = 'all',
+    hasOpenRoles = 'all',
+    isAutoSync = 'all',
+    syncStatus = 'all',
+    startingWith = '',
+    sort = 'openRoles',
+  } = req.query;
+
+  const query = {};
+
+  if (search && search.trim()) {
+    const s = search.trim();
+    query.$or = [
+      { name: new RegExp(s, 'i') },
+      { slug: new RegExp(s, 'i') },
+      { token: new RegExp(s, 'i') },
+      { boardUrl: new RegExp(s, 'i') },
+    ];
+  }
+
+  if (platform && platform !== 'all') {
+    query.platform = platform.toLowerCase();
+  }
+
+  if (hasOpenRoles === 'yes') {
+    query.openRoles = { $gt: 0 };
+  } else if (hasOpenRoles === 'no') {
+    query.$or = [{ openRoles: { $lte: 0 } }, { openRoles: null }, { openRoles: { $exists: false } }];
+  }
+
+  if (isAutoSync === 'true') {
+    query.isAutoSync = true;
+  } else if (isAutoSync === 'false') {
+    query.isAutoSync = false;
+  }
+
+  if (syncStatus && syncStatus !== 'all') {
+    query.syncStatus = syncStatus;
+  }
+
+  if (startingWith) {
+    if (startingWith === '#') {
+      query.name = { $regex: /^[^a-zA-Z]/ };
+    } else {
+      query.name = { $regex: new RegExp('^' + startingWith, 'i') };
+    }
+  }
+
+  const sortMap = {
+    openRoles: { openRoles: -1, name: 1 },
+    name: { name: 1 },
+    '-name': { name: -1 },
+    jobCount: { jobCount: -1, name: 1 },
+    lastSyncAt: { lastSyncAt: -1 },
+    newest: { createdAt: -1 },
+  };
+
+  const sortOption = sortMap[sort] || { openRoles: -1 };
+  const skip = (Math.max(1, Number(page)) - 1) * Number(limit);
+
+  const [companies, total, totalWithRoles, autoSyncCount, totalJobs] = await Promise.all([
+    Company.find(query).sort(sortOption).skip(skip).limit(Number(limit)).lean(),
+    Company.countDocuments(query),
+    Company.countDocuments({ openRoles: { $gt: 0 } }),
+    Company.countDocuments({ isAutoSync: true }),
+    Job.countDocuments({ isActive: true }),
+  ]);
+
+  return ApiResponse.paginated(
+    res,
+    companies,
+    {
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      pages: Math.ceil(total / Number(limit)),
+      stats: {
+        totalCompanies: await Company.estimatedDocumentCount(),
+        withOpenRoles: totalWithRoles,
+        autoSyncCount,
+        totalJobs,
+      },
+    },
+    'Admin companies fetched'
+  );
+};
+
+// ─── Get Company Jobs (Career Board style) ───────────────────────────────────
+exports.getCompanyJobs = async (req, res) => {
+  const { slugOrId } = req.params;
+  const {
+    page = 1,
+    limit = 20,
+    search = '',
+    department = '',
+    workMode = 'all',
+    category = 'all',
+  } = req.query;
+
+  let company = null;
+  if (mongoose.Types.ObjectId.isValid(slugOrId)) {
+    company = await Company.findById(slugOrId).lean();
+  }
+  if (!company) {
+    company = await Company.findOne({ slug: slugOrId.toLowerCase() }).lean();
+  }
+  if (!company) {
+    company = await Company.findOne({ name: new RegExp('^' + slugOrId + '$', 'i') }).lean();
+  }
+
+  const jobQuery = { isActive: true };
+
+  if (company) {
+    jobQuery.$or = [
+      { company: company._id },
+      { companyTag: company.slug },
+      { companyName: new RegExp('^' + company.name + '$', 'i') },
+    ];
+  } else {
+    jobQuery.$or = [
+      { companyTag: slugOrId.toLowerCase() },
+      { companyName: new RegExp('^' + slugOrId + '$', 'i') },
+    ];
+  }
+
+  if (search && search.trim()) {
+    const s = search.trim();
+    jobQuery.$and = [
+      {
+        $or: [
+          { title: new RegExp(s, 'i') },
+          { location: new RegExp(s, 'i') },
+          { description: new RegExp(s, 'i') },
+          { tags: new RegExp(s, 'i') },
+        ],
+      },
+    ];
+  }
+
+  if (department && department !== 'all') {
+    jobQuery.tags = { $in: [new RegExp(department, 'i')] };
+  }
+
+  if (workMode && workMode !== 'all') {
+    jobQuery.workMode = workMode;
+  }
+
+  if (category && category !== 'all') {
+    jobQuery.category = category;
+  }
+
+  const skip = (Math.max(1, Number(page)) - 1) * Number(limit);
+
+  const [jobs, total] = await Promise.all([
+    Job.find(jobQuery)
+      .populate('company', 'name logo website platform boardUrl')
+      .sort({ postedAt: -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .lean(),
+    Job.countDocuments(jobQuery),
+  ]);
+
+  return ApiResponse.paginated(
+    res,
+    jobs,
+    {
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      pages: Math.ceil(total / Number(limit)),
+      company: company || { name: slugOrId, slug: slugOrId },
+    },
+    'Company jobs fetched'
+  );
+};
+
+// ─── Admin: Sync Single Company ───────────────────────────────────────────────
+exports.syncSingleCompany = async (req, res) => {
+  const { id } = req.params;
+  const { postedWithinDays = 'all', experienceFilter = 'all', categoryFilter = 'all' } = req.body;
+
+  let company = null;
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    company = await Company.findById(id);
+  }
+  if (!company) {
+    company = await Company.findOne({ slug: id.toLowerCase() });
+  }
+
+  if (!company) {
+    return ApiResponse.notFound(res, 'Company not found');
+  }
+
+  try {
+    const result = await syncJobsForCompany(company, {
+      postedWithinDays,
+      experienceFilter,
+      categoryFilter,
+    });
+
+    return ApiResponse.success(res, result, `Synced ${result.saved} new jobs for ${company.name}`);
+  } catch (err) {
+    return ApiResponse.error(res, err.message || 'Sync failed', 500);
+  }
+};
+
+// ─── Admin: Batch Global Sync ─────────────────────────────────────────────────
+exports.globalSync = async (req, res) => {
+  const {
+    companyIds = [],
+    postedWithinDays = 'all',
+    experienceFilter = 'all',
+    categoryFilter = 'all',
+  } = req.body;
+
+  if (!Array.isArray(companyIds) || companyIds.length === 0) {
+    return ApiResponse.badRequest(res, 'Please provide an array of companyIds to sync');
+  }
+
+  try {
+    const summary = await globalSyncCompanies(companyIds, {
+      postedWithinDays,
+      experienceFilter,
+      categoryFilter,
+    });
+
+    return ApiResponse.success(res, summary, `Global sync finished: ${summary.totalSaved} jobs saved`);
+  } catch (err) {
+    return ApiResponse.error(res, err.message || 'Global sync failed', 500);
+  }
+};
+
+// ─── Admin: Update Company Info & Logo (Cascades to Jobs) ─────────────────────
+exports.updateCompanyInfo = async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+
+  let company = await Company.findById(id);
+  if (!company) {
+    company = await Company.findOne({ slug: id.toLowerCase() });
+  }
+
+  if (!company) {
+    return ApiResponse.notFound(res, 'Company not found');
+  }
+
+  const allowed = [
+    'name',
+    'logo',
+    'website',
+    'industry',
+    'description',
+    'platform',
+    'token',
+    'boardUrl',
+    'isAutoSync',
+    'hasWhiteBg',
+    'isPopular',
+    'isEnabled',
+  ];
+
+  for (const field of allowed) {
+    if (updates[field] !== undefined) {
+      company[field] = updates[field];
+    }
+  }
+
+  await company.save();
+
+  // Cascade name and logo to all corresponding Job documents
+  const jobUpdates = {};
+  if (updates.name && updates.name.trim()) jobUpdates.companyName = company.name;
+  if (updates.logo !== undefined) jobUpdates.companyLogo = company.logo;
+
+  if (Object.keys(jobUpdates).length > 0) {
+    await Job.updateMany(
+      {
+        $or: [
+          { company: company._id },
+          { companyTag: company.slug },
+          { companyName: new RegExp('^' + company.name + '$', 'i') },
+        ],
+      },
+      { $set: jobUpdates }
+    );
+  }
+
+  return ApiResponse.success(res, { company }, 'Company updated successfully');
+};
+
+// ─── Admin: Toggle Auto-Sync for Multiple Companies ───────────────────────────
+exports.toggleAutoSync = async (req, res) => {
+  const { companyIds = [], isAutoSync = true } = req.body;
+
+  if (!Array.isArray(companyIds) || companyIds.length === 0) {
+    return ApiResponse.badRequest(res, 'Please provide companyIds array');
+  }
+
+  await Company.updateMany(
+    { _id: { $in: companyIds } },
+    { $set: { isAutoSync: Boolean(isAutoSync) } }
+  );
+
+  return ApiResponse.success(
+    res,
+    { count: companyIds.length, isAutoSync },
+    `Updated auto-sync for ${companyIds.length} companies`
+  );
+};
+
+// ─── Admin: Daily Auto-Sync Scheduler Settings ───────────────────────────────
+exports.getSchedulerSettings = async (req, res) => {
+  let settings = await JobSettings.findOne();
+  if (!settings) {
+    settings = await JobSettings.create({});
+  }
+
+  const autoSyncCompaniesCount = await Company.countDocuments({ isAutoSync: true });
+
+  return ApiResponse.success(res, {
+    autoSyncScheduleTime: settings.autoSyncScheduleTime || '02:00',
+    autoSyncEnabled: settings.autoSyncEnabled !== false,
+    autoSyncFilterPostedWithinDays: settings.autoSyncFilterPostedWithinDays || 2,
+    autoSyncFilterExperience: settings.autoSyncFilterExperience || 'all',
+    autoSyncFilterCategory: settings.autoSyncFilterCategory || 'all',
+    lastAutoSyncAt: settings.lastAutoSyncAt,
+    lastAutoSyncResult: settings.lastAutoSyncResult,
+    autoSyncCompaniesCount,
+  });
+};
+
+exports.updateSchedulerSettings = async (req, res) => {
+  const {
+    autoSyncScheduleTime,
+    autoSyncEnabled,
+    autoSyncFilterPostedWithinDays,
+    autoSyncFilterExperience,
+    autoSyncFilterCategory,
+  } = req.body;
+
+  let settings = await JobSettings.findOne();
+  if (!settings) {
+    settings = await JobSettings.create({});
+  }
+
+  if (autoSyncScheduleTime !== undefined) settings.autoSyncScheduleTime = autoSyncScheduleTime;
+  if (autoSyncEnabled !== undefined) settings.autoSyncEnabled = Boolean(autoSyncEnabled);
+  if (autoSyncFilterPostedWithinDays !== undefined)
+    settings.autoSyncFilterPostedWithinDays = Number(autoSyncFilterPostedWithinDays);
+  if (autoSyncFilterExperience !== undefined) settings.autoSyncFilterExperience = autoSyncFilterExperience;
+  if (autoSyncFilterCategory !== undefined) settings.autoSyncFilterCategory = autoSyncFilterCategory;
+
+  await settings.save();
+
+  // Reschedule cron job
+  await rescheduleDailySync(settings.autoSyncScheduleTime, settings.autoSyncEnabled);
+
+  return ApiResponse.success(res, { settings }, 'Scheduler settings saved');
+};
+
+exports.triggerAutoSyncNow = async (req, res) => {
+  runAutoSyncNow().catch((err) => console.error('[Manual AutoSync] Error:', err));
+  return ApiResponse.success(res, null, 'Auto-sync job triggered in background');
 };

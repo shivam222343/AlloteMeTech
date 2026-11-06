@@ -16,6 +16,16 @@ import {
   shareOnWhatsApp,
 } from '../../components/jobs/whatsappHelper';
 
+const formatCompanyName = (job) => {
+  if (job?.company?.name && job.company.name.trim()) return job.company.name.trim();
+  const raw = (job?.companyName || job?.companyTag || '').trim();
+  if (!raw) return 'Company';
+  if (raw === raw.toLowerCase()) {
+    return raw.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return raw;
+};
+
 const JOB_TYPES = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
 const WORK_MODES = ['Remote', 'Hybrid', 'On-site'];
 
@@ -229,13 +239,13 @@ function ParsedJobCard({ job, index, selected, onToggle, onEdit }) {
         {/* Company initial */}
         <div className="w-9 h-9 rounded-lg bg-bg-secondary border border-border flex items-center justify-center flex-shrink-0">
           <span className="text-base font-bold text-text-faint">
-            {(job.companyName || job.companyTag || '?').charAt(0).toUpperCase()}
+            {formatCompanyName(job).charAt(0).toUpperCase()}
           </span>
         </div>
 
         {/* Title + meta */}
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-accent-blue font-medium truncate">{job.companyName || job.companyTag}</p>
+          <p className="text-xs text-accent-blue font-medium truncate">{formatCompanyName(job)}</p>
           <p className="text-sm font-semibold text-text-primary leading-tight line-clamp-1">{job.title}</p>
           <div className="flex flex-wrap gap-1.5 mt-1">
             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${TYPE_COLORS[job.jobType] || 'bg-bg-secondary text-text-muted'}`}>{job.jobType}</span>
@@ -997,6 +1007,7 @@ function ManageJobsTab() {
     manual: 'bg-bg-secondary text-text-muted',
     ai: 'bg-accent-yellow/10 text-accent-yellow',
     scraped: 'bg-accent-blue/10 text-accent-blue',
+    ats: 'bg-accent-green/10 text-accent-green border border-accent-green/20',
   };
 
   return (
@@ -1574,7 +1585,7 @@ function ManageJobsTab() {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs text-text-faint mt-1">
-                  <span>{job.companyName || job.companyTag || '—'} · {job.jobType} · {job.workMode}</span>
+                  <span>{formatCompanyName(job)} · {job.jobType} · {job.workMode}</span>
                   {job.salary && <span className="font-medium text-accent-green">· {job.salary}</span>}
                   {(job.scrapedAt || (job.source === 'scraped' && job.createdAt)) && (
                     <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-accent-blue bg-accent-blue/5 border border-accent-blue/20 px-1.5 py-0.5 rounded font-medium">

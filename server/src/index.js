@@ -23,6 +23,7 @@ const adminRoutes = require('./routes/admin');
 const githubRoutes = require('./routes/githubRoutes');
 const discussionRoutes = require('./routes/discussion');
 const githubScheduler = require('./github/github.scheduler');
+const { initAtsScheduler } = require('./services/atsSchedulerService');
 
 // Connect DB
 connectDB();
@@ -216,6 +217,7 @@ server.listen(PORT, () => {
   
   // Start the background cron jobs
   githubScheduler.init();
+  initAtsScheduler();
 });
 
 module.exports = { app, server };

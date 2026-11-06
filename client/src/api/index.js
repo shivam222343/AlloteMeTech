@@ -16,6 +16,16 @@ export const companiesApi = {
   getAll: (params) => api.get('/companies', { params }),
   getOne: (slug) => api.get(`/companies/${slug}`),
   getProblems: (slug, params) => api.get(`/companies/${slug}/problems`, { params }),
+  getJobs: (slugOrId, params) => api.get(`/companies/${slugOrId}/jobs`, { params }),
+  // Admin ATS management
+  adminGetAll: (params) => api.get('/companies/admin', { params }),
+  syncCompany: (id, data) => api.post(`/companies/${id}/sync`, data),
+  globalSync: (data) => api.post('/companies/global-sync', data),
+  updateInfo: (id, data) => api.patch(`/companies/${id}`, data),
+  toggleAutoSync: (data) => api.post('/companies/toggle-autosync', data),
+  getSchedulerSettings: () => api.get('/companies/scheduler/settings'),
+  updateSchedulerSettings: (data) => api.post('/companies/scheduler/settings', data),
+  runSchedulerNow: () => api.post('/companies/scheduler/run-now'),
 };
 
 // ── Topics ────────────────────────────────────────────────────────────────────

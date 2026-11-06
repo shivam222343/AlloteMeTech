@@ -40,7 +40,18 @@ const CompanyCard = ({ company }) => (
         </h3>
         <ChevronRight className="w-3.5 h-3.5 text-text-faint group-hover:text-accent-blue transition-colors flex-shrink-0" />
       </div>
-      <p className="text-xs text-text-muted mt-0.5">{company.totalQuestions} questions</p>
+      <div className="flex items-center gap-2 mt-0.5 text-xs">
+        {company.openRoles > 0 ? (
+          <span className="font-semibold text-accent-green">{company.openRoles} open roles</span>
+        ) : (
+          <span className="text-text-muted">{company.totalQuestions || 0} questions</span>
+        )}
+        {company.platform && (
+          <span className="text-[10px] px-1.5 py-0.2 rounded bg-bg-secondary text-text-faint capitalize">
+            {company.platform}
+          </span>
+        )}
+      </div>
       {company.updatedAt && (
         <p className="text-2xs text-text-faint mt-1">Updated {formatRelativeTime(company.updatedAt)}</p>
       )}
