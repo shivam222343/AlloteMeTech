@@ -122,6 +122,7 @@ export const paymentApi = {
 export const jobsApi = {
   getAll: (params) => api.get('/jobs', { params }),
   getOne: (slug) => api.get(`/jobs/${slug}`),
+  getLocations: (params) => api.get('/jobs/meta/locations', { params }),
   getApplyStatus: () => api.get('/jobs/apply/status'),
   trackApply: (jobId) => api.post('/jobs/apply/track', { jobId }),
   // Admin

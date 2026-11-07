@@ -5,7 +5,7 @@ import {
   ExternalLink, CheckCircle2, AlertCircle, X, MapPin, Briefcase,
   Banknote, ChevronDown, ChevronUp, Send, Eye, EyeOff,
   Building2, Check, Mail, Phone, Upload, Image, Link2, Key, Copy,
-  Terminal, Clock,
+  Terminal, Clock, Globe,
 } from 'lucide-react';
 import { jobsApi } from '../../api';
 import toast from 'react-hot-toast';
@@ -572,6 +572,8 @@ function ManageJobsTab() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [reviewFilter, setReviewFilter] = useState('all'); // 'all', 'unreviewed', 'reviewed'
+  const [countryFilter, setCountryFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('');
   const [editingJob, setEditingJob] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [stoppingSync, setStoppingSync] = useState(false);
@@ -585,6 +587,24 @@ function ManageJobsTab() {
   const [selectedPages, setSelectedPages] = useState([1, 2, 3, 4]);
   const [pagesInputText, setPagesInputText] = useState('1, 2, 3, 4');
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Available locations & country presets metadata
+  const { data: locMeta } = useQuery({
+    queryKey: ['admin-jobs-locations-meta'],
+    queryFn: () => jobsApi.getLocations().then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const availableCountries = locMeta?.countries || [
+    { id: 'all', label: 'All Countries', flag: '🌐' },
+    { id: 'india', label: 'India', flag: '🇮🇳' },
+    { id: 'us', label: 'United States', flag: '🇺🇸' },
+    { id: 'remote', label: 'Remote', flag: '🏠' },
+    { id: 'uk', label: 'United Kingdom', flag: '🇬🇧' },
+    { id: 'canada', label: 'Canada', flag: '🇨🇦' },
+    { id: 'germany', label: 'Germany', flag: '🇩🇪' },
+  ];
+  const availableLocations = locMeta?.locations || [];
 
   // Poll sync status & live terminal logs when sync is running or terminal is open
   useEffect(() => {
@@ -646,7 +666,7 @@ function ManageJobsTab() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-jobs', page, search, categoryFilter, reviewFilter],
+    queryKey: ['admin-jobs', page, search, categoryFilter, reviewFilter, countryFilter, locationFilter],
     queryFn: () =>
       jobsApi
         .adminGetAll({
@@ -655,6 +675,8 @@ function ManageJobsTab() {
           search,
           category: categoryFilter,
           isReviewed: reviewFilter === 'all' ? undefined : (reviewFilter === 'reviewed' ? 'true' : 'false'),
+          country: countryFilter !== 'all' ? countryFilter : undefined,
+          location: locationFilter || undefined,
         })
         .then((r) => r.data),
   });
@@ -973,6 +995,86 @@ function ManageJobsTab() {
               Sync HireDoor
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Country & Location Filter Toolbar */}
+      <div className="flex flex-wrap items-center gap-2.5 p-2.5 bg-bg-card border border-border rounded-xl">
+        <div className="flex items-center gap-1.5 text-xs text-text-muted font-medium flex-shrink-0">
+          <Globe className="w-3.5 h-3.5 text-accent-blue" />
+          <span>Country:</span>
+        </div>
+
+        <div className="flex items-center gap-1 bg-bg-secondary p-1 rounded-lg border border-border overflow-x-auto no-scrollbar flex-shrink-0">
+          {availableCountries.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => { setCountryFilter(c.id); setPage(1); }}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md whitespace-nowrap transition-all flex items-center gap-1 ${
+                countryFilter === c.id
+                  ? 'bg-accent-blue text-white shadow-sm'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              <span>{c.flag}</span>
+              <span>{c.label}</span>
+              {c.count !== undefined && c.count > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  countryFilter === c.id ? 'bg-white/20 text-white' : 'bg-bg-card text-text-faint'
+                }`}>
+                  {c.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="h-4 w-px bg-border hidden sm:block" />
+
+        {/* Location input with datalist */}
+        <div className="relative min-w-[200px] max-w-xs flex-1">
+          <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-faint pointer-events-none" />
+          <input
+            type="text"
+            list="admin-available-locations-list"
+            value={locationFilter}
+            onChange={(e) => { setLocationFilter(e.target.value); setPage(1); }}
+            placeholder="Filter location / city..."
+            className="input text-xs py-1.5 pl-8 pr-7 w-full"
+          />
+          {locationFilter && (
+            <button
+              type="button"
+              onClick={() => { setLocationFilter(''); setPage(1); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-faint hover:text-text-primary"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+          <datalist id="admin-available-locations-list">
+            {availableLocations.slice(0, 200).map((loc) => (
+              <option key={loc} value={loc} />
+            ))}
+          </datalist>
+        </div>
+
+        {(countryFilter !== 'all' || locationFilter) && (
+          <button
+            type="button"
+            onClick={() => {
+              setCountryFilter('all');
+              setLocationFilter('');
+              setPage(1);
+            }}
+            className="btn btn-ghost btn-sm text-xs py-1 px-2.5 flex items-center gap-1 text-text-muted hover:text-text-primary"
+          >
+            <X className="w-3 h-3" /> Reset Location
+          </button>
+        )}
+
+        <div className="text-[11px] text-text-faint ml-auto hidden md:block">
+          {pagination.total !== undefined && `${pagination.total} total matching jobs`}
         </div>
       </div>
 

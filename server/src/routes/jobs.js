@@ -24,6 +24,7 @@ const {
   adminBulkDelete,
   getApplyStatus,
   trackJobApply,
+  getJobLocations,
 } = require('../controllers/jobController');
 const { protect, adminOnly, optionalAuth } = require('../middleware/auth');
 
@@ -46,6 +47,10 @@ router.get('/admin/sync-logs/stream', protect, adminOnly, streamSyncLogs);
 // Job Application limit and tracking routes (optionalAuth: supports both guests and logged-in users)
 router.get('/apply/status', optionalAuth, getApplyStatus);
 router.post('/apply/track', optionalAuth, trackJobApply);
+
+// Location and Country filters metadata (available to both users and admin)
+router.get('/meta/locations', optionalAuth, getJobLocations);
+router.get('/locations', optionalAuth, getJobLocations);
 
 // Public routes (with optionalAuth to determine free vs premium user gating)
 router.get('/', optionalAuth, getJobs);

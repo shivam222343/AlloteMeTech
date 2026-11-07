@@ -4,6 +4,59 @@ const Job = require('../models/Job');
 const Company = require('../models/Company');
 const JobSettings = require('../models/JobSettings');
 const ApiResponse = require('../utils/apiResponse');
+const { COUNTRY_MAP } = require('../services/atsScraperService');
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildLocationQuery(country, location) {
+  const conditions = [];
+
+  if (location && typeof location === 'string' && location.trim() && location.trim() !== 'all') {
+    conditions.push({ location: { $regex: new RegExp(escapeRegex(location.trim()), 'i') } });
+  }
+
+  if (country && typeof country === 'string' && country.trim() && country.trim() !== 'all') {
+    const cLower = country.toLowerCase().trim();
+    if (cLower === 'remote') {
+      conditions.push({
+        $or: [
+          { workMode: 'Remote' },
+          { location: { $regex: /remote|wfh|anywhere|work from home/i } },
+        ],
+      });
+    } else {
+      const presetKey = cLower.replace(/[^a-z]/g, '');
+      const preset =
+        (COUNTRY_MAP && COUNTRY_MAP[presetKey]) ||
+        (cLower === 'united states' ? COUNTRY_MAP?.us : null) ||
+        (cLower === 'united kingdom' ? COUNTRY_MAP?.uk : null);
+
+      if (preset) {
+        const orParts = [];
+        if (preset.names && preset.names.length) {
+          orParts.push({ location: { $regex: new RegExp(`\\b(${preset.names.map(escapeRegex).join('|')})\\b`, 'i') } });
+        }
+        if (preset.cities && preset.cities.length) {
+          orParts.push({ location: { $regex: new RegExp(`\\b(${preset.cities.map(escapeRegex).join('|')})\\b`, 'i') } });
+        }
+        if (preset.stateCodes && preset.stateCodes.length) {
+          orParts.push({ location: { $regex: new RegExp(`(?:,|\\/|\\-|\\s)\\s*(${preset.stateCodes.join('|')})(?:\\s|;|,|\\/|$|\\d)`, 'i') } });
+        }
+        if (orParts.length > 0) {
+          conditions.push({ $or: orParts });
+        }
+      } else {
+        conditions.push({ location: { $regex: new RegExp(escapeRegex(country.trim()), 'i') } });
+      }
+    }
+  }
+
+  if (conditions.length === 0) return null;
+  if (conditions.length === 1) return conditions[0];
+  return { $and: conditions };
+}
 
 function generateSlug(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now();
@@ -70,7 +123,7 @@ function replaceHiredoorWithAlloteme(val) {
 
 // ── Public: Get All Jobs ──────────────────────────────────────────────────────
 exports.getJobs = async (req, res) => {
-  const { page = 1, limit = 20, search, jobType, workMode, company, tag, category } = req.query;
+  const { page = 1, limit = 20, search, jobType, workMode, company, tag, category, country, location } = req.query;
   const isAdmin = Boolean(req.user && req.user.role === 'admin');
   const isPaidOrAdmin = Boolean(
     isAdmin || (req.user && req.user.isPremium && (!req.user.premiumExpiresAt || new Date(req.user.premiumExpiresAt) > new Date()))
@@ -105,6 +158,13 @@ exports.getJobs = async (req, res) => {
         { category: null },
       ]
     });
+  }
+
+  // Country & Location filter
+  const locCondition = buildLocationQuery(country, location);
+  if (locCondition) {
+    query.$and = query.$and || [];
+    query.$and.push(locCondition);
   }
 
   const skip = (Number(page) - 1) * Number(limit);
@@ -360,7 +420,7 @@ exports.serveJobOgHtml = async (req, res) => {
 
 // ── Admin: Get All Jobs (including inactive) ──────────────────────────────────
 exports.adminGetJobs = async (req, res) => {
-  const { page = 1, limit = 20, search, source, category, isReviewed } = req.query;
+  const { page = 1, limit = 20, search, source, category, isReviewed, country, location } = req.query;
   const query = {};
   if (search) query.$or = [{ title: new RegExp(search, 'i') }, { companyName: new RegExp(search, 'i') }];
   if (source) query.source = source;
@@ -382,6 +442,13 @@ exports.adminGetJobs = async (req, res) => {
     }
   }
 
+  // Country & Location filter
+  const locCondition = buildLocationQuery(country, location);
+  if (locCondition) {
+    query.$and = query.$and || [];
+    query.$and.push(locCondition);
+  }
+
   const skip = (Number(page) - 1) * Number(limit);
   const [jobs, total, techCount, nonTechCount, pendingReviewCount, reviewedCount] = await Promise.all([
     Job.find(query).populate('company', 'name slug logo hasWhiteBg').sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
@@ -401,6 +468,70 @@ exports.adminGetJobs = async (req, res) => {
     pendingReviewCount,
     reviewedCount,
   });
+};
+
+// ── Public & Admin: Get Available Locations & Country Presets ─────────────────
+exports.getJobLocations = async (req, res) => {
+  try {
+    const isAdmin = Boolean(req.user && req.user.role === 'admin');
+    const filter = !isAdmin ? { isActive: true, isReviewed: true } : { isActive: true };
+
+    const distinctLocations = await Job.distinct('location', {
+      ...filter,
+      location: { $exists: true, $ne: '' },
+    });
+
+    const cleanedSet = new Set();
+    for (const loc of distinctLocations) {
+      if (!loc || typeof loc !== 'string') continue;
+      const trimmed = loc.trim();
+      if (trimmed.length < 2 || /^\d+$/.test(trimmed)) continue;
+      cleanedSet.add(trimmed);
+    }
+
+    const sortedLocations = Array.from(cleanedSet).sort((a, b) => a.localeCompare(b));
+
+    const countryPresets = [
+      { id: 'all', label: 'All Locations', flag: '🌐' },
+      { id: 'india', label: 'India', flag: '🇮🇳' },
+      { id: 'us', label: 'United States', flag: '🇺🇸' },
+      { id: 'remote', label: 'Remote', flag: '🏠' },
+      { id: 'uk', label: 'United Kingdom', flag: '🇬🇧' },
+      { id: 'canada', label: 'Canada', flag: '🇨🇦' },
+      { id: 'germany', label: 'Germany', flag: '🇩🇪' },
+    ];
+
+    const presetCounts = await Promise.all(
+      countryPresets.map(async (cp) => {
+        if (cp.id === 'all') {
+          return { id: cp.id, count: await Job.countDocuments(filter) };
+        }
+        const cond = buildLocationQuery(cp.id);
+        const count = await Job.countDocuments({
+          ...filter,
+          ...(cond ? (cond.$and ? { $and: cond.$and } : cond) : {}),
+        });
+        return { id: cp.id, count };
+      })
+    );
+
+    const countMap = {};
+    presetCounts.forEach((p) => {
+      countMap[p.id] = p.count;
+    });
+
+    const enrichedPresets = countryPresets.map((cp) => ({
+      ...cp,
+      count: countMap[cp.id] || 0,
+    }));
+
+    return ApiResponse.success(res, {
+      countries: enrichedPresets,
+      locations: sortedLocations,
+    });
+  } catch (err) {
+    return ApiResponse.error(res, err.message || 'Failed to fetch job locations', 500);
+  }
 };
 
 // ── Admin: Review / Approve Single Job ───────────────────────────────────────

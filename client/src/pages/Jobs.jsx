@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Briefcase, X, CheckSquare, Square, Copy, Check } from 'lucide-react';
+import { Search, Briefcase, X, CheckSquare, Square, Copy, Check, MapPin, Globe } from 'lucide-react';
 import { jobsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import JobCard from '../components/jobs/JobCard';
@@ -22,6 +22,8 @@ export default function Jobs() {
   const isAdmin = user?.role === 'admin';
 
   const [category, setCategory] = useState('Tech');
+  const [country, setCountry] = useState('all');
+  const [location, setLocation] = useState('');
   const [search, setSearch] = useState('');
   const [jobType, setJobType] = useState('');
   const [workMode, setWorkMode] = useState('');
@@ -29,20 +31,52 @@ export default function Jobs() {
   const [selectedJobIds, setSelectedJobIds] = useState(new Set());
   const [copied, setCopied] = useState(false);
 
+  // Available locations & country presets metadata
+  const { data: metaData } = useQuery({
+    queryKey: ['job-locations-meta'],
+    queryFn: () => jobsApi.getLocations().then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const availableCountries = metaData?.countries || [
+    { id: 'all', label: 'All Locations', flag: '🌐' },
+    { id: 'india', label: 'India', flag: '🇮🇳' },
+    { id: 'us', label: 'United States', flag: '🇺🇸' },
+    { id: 'remote', label: 'Remote', flag: '🏠' },
+    { id: 'uk', label: 'United Kingdom', flag: '🇬🇧' },
+    { id: 'canada', label: 'Canada', flag: '🇨🇦' },
+    { id: 'germany', label: 'Germany', flag: '🇩🇪' },
+  ];
+  const availableLocations = metaData?.locations || [];
+
   const { data, isLoading } = useQuery({
-    queryKey: ['jobs', category, search, jobType, workMode, page],
-    queryFn: () => jobsApi.getAll({ category, search, jobType, workMode, page, limit: 12 }).then(r => r.data),
+    queryKey: ['jobs', category, search, jobType, workMode, country, location, page],
+    queryFn: () =>
+      jobsApi
+        .getAll({
+          category,
+          search,
+          jobType,
+          workMode,
+          country: country !== 'all' ? country : undefined,
+          location: location || undefined,
+          page,
+          limit: 12,
+        })
+        .then((r) => r.data),
     keepPreviousData: true,
   });
 
   const jobs = data?.data || [];
   const pagination = data?.pagination || {};
-  const hasFilters = search || jobType || workMode;
+  const hasFilters = search || jobType || workMode || country !== 'all' || location;
 
   const clearFilters = () => {
     setSearch('');
     setJobType('');
     setWorkMode('');
+    setCountry('all');
+    setLocation('');
     setPage(1);
   };
 
@@ -107,7 +141,7 @@ export default function Jobs() {
       <JobsPremiumBanner />
 
       {/* Category Toggle: Tech vs Non-Tech */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex p-1 rounded-xl bg-bg-card border border-border shadow-sm">
           <button
             type="button"
@@ -149,6 +183,56 @@ export default function Jobs() {
 
         <div className="text-xs text-text-muted">
           Showing <span className="font-semibold text-text-primary">{category === 'Non-Tech' ? 'Non-Tech' : 'Tech'}</span> roles
+        </div>
+      </div>
+
+      {/* Country / Location Sections Ribbon */}
+      <div className="mb-6 bg-bg-card/70 border border-border rounded-2xl p-3 sm:p-3.5 shadow-sm">
+        <div className="flex items-center justify-between mb-2 px-0.5">
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-accent-blue" />
+            <span className="text-xs font-bold uppercase tracking-wider text-text-primary">
+              Locations & Countries
+            </span>
+          </div>
+          <span className="text-[11px] text-text-muted hidden sm:inline">
+            {country !== 'all'
+              ? `Filtered by ${availableCountries.find((c) => c.id === country)?.label || country}`
+              : 'Showing worldwide opportunities'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+          {availableCountries.map((c) => {
+            const isSelected = country === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  setCountry(c.id);
+                  setPage(1);
+                }}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+                  isSelected
+                    ? 'bg-accent-blue text-white border-accent-blue shadow-md scale-[1.02]'
+                    : 'bg-bg-secondary text-text-muted border-border hover:border-border-hover hover:text-text-primary'
+                }`}
+              >
+                <span className="text-sm">{c.flag}</span>
+                <span>{c.label}</span>
+                {c.count !== undefined && c.count > 0 && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-bg-card text-text-faint'
+                    }`}
+                  >
+                    {c.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -214,7 +298,7 @@ export default function Jobs() {
       <div className="flex flex-wrap gap-3 mb-6">
         {/* Search */}
         <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-faint" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-faint pointer-events-none" />
           <input
             type="text"
             placeholder="Search jobs..."
@@ -222,6 +306,39 @@ export default function Jobs() {
             onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="input w-full pl-9 py-2 text-sm"
           />
+        </div>
+
+        {/* Location Filter Input with Datalist */}
+        <div className="relative flex-1 min-w-[190px] max-w-xs">
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-faint pointer-events-none" />
+          <input
+            type="text"
+            list="jobs-available-locations-user"
+            placeholder={
+              country === 'india'
+                ? 'City in India (e.g. Bangalore, Pune)...'
+                : country === 'us'
+                ? 'City in US (e.g. San Francisco, NY)...'
+                : 'Filter city / location...'
+            }
+            value={location}
+            onChange={e => { setLocation(e.target.value); setPage(1); }}
+            className="input w-full pl-9 pr-7 py-2 text-sm"
+          />
+          {location && (
+            <button
+              type="button"
+              onClick={() => { setLocation(''); setPage(1); }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-faint hover:text-text-primary"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <datalist id="jobs-available-locations-user">
+            {availableLocations.slice(0, 200).map(loc => (
+              <option key={loc} value={loc} />
+            ))}
+          </datalist>
         </div>
 
         {/* Job Type */}
@@ -245,8 +362,8 @@ export default function Jobs() {
         </select>
 
         {hasFilters && (
-          <button onClick={clearFilters} className="btn btn-ghost btn-sm flex items-center gap-1.5">
-            <X className="w-3.5 h-3.5" /> Clear
+          <button onClick={clearFilters} className="btn btn-ghost btn-sm flex items-center gap-1.5 self-center">
+            <X className="w-3.5 h-3.5" /> Clear Filters
           </button>
         )}
       </div>
