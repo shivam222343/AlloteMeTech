@@ -6,6 +6,7 @@ const JobSettings = require('../models/JobSettings');
 const ApiResponse = require('../utils/apiResponse');
 const { syncJobsForCompany, globalSyncCompanies } = require('../services/atsScraperService');
 const { rescheduleDailySync, runAutoSyncNow } = require('../services/atsSchedulerService');
+const { findCompanyLogo } = require('../services/logoFinderService');
 const {
   logScraper,
   getActiveSyncState,
@@ -803,4 +804,241 @@ exports.updateSchedulerSettings = async (req, res) => {
 exports.triggerAutoSyncNow = async (req, res) => {
   runAutoSyncNow().catch((err) => console.error('[Manual AutoSync] Error:', err));
   return ApiResponse.success(res, null, 'Auto-sync job triggered in background');
+};
+
+// ── Logo Automation State & Session Manager ─────────────────────────────────
+let activeLogoSession = {
+  isActive: false,
+  status: 'idle',
+  letter: 'ALL',
+  totalToProcess: 0,
+  processedCount: 0,
+  foundWebpCount: 0,
+  foundOtherCount: 0,
+  skippedCount: 0,
+  failedCount: 0,
+  currentCompany: '',
+  startedAt: null,
+  completedAt: null,
+};
+
+let logoLogs = [];
+let isLogoCancelled = false;
+
+function logLogo(type, message) {
+  const timestamp = new Date().toLocaleTimeString();
+  const entry = {
+    id: Date.now() + Math.random().toString(36).substring(2, 6),
+    time: timestamp,
+    type,
+    message,
+  };
+  logoLogs.push(entry);
+  if (logoLogs.length > 500) logoLogs.shift();
+  return entry;
+}
+
+// ── Admin: Start Auto-Logo Search Automation ─────────────────────────────────
+exports.startAutoLogoFinder = async (req, res) => {
+  const {
+    letter = 'a',
+    onlyMissing = true,
+    limit = 50,
+    preferWebp = true,
+    cascadeToJobs = true,
+  } = req.body;
+
+  if (activeLogoSession.isActive) {
+    return ApiResponse.error(res, 'Logo search automation is already in progress', 400, {
+      state: activeLogoSession,
+    });
+  }
+
+  // Construct MongoDB filter based on letter and missing logo
+  const filter = {};
+
+  if (letter && String(letter).toLowerCase() !== 'all') {
+    const l = String(letter).trim().toLowerCase();
+    if (l === '0-9' || l === '#') {
+      filter.$or = [
+        { slug: { $regex: '^[0-9]' } },
+        { name: { $regex: '^[0-9]' } },
+      ];
+    } else {
+      filter.$or = [
+        { slug: { $regex: `^${l}`, $options: 'i' } },
+        { name: { $regex: `^${l}`, $options: 'i' } },
+      ];
+    }
+  }
+
+  if (onlyMissing !== false) {
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [
+        { logo: null },
+        { logo: '' },
+        { logo: { $exists: false } },
+      ],
+    });
+  }
+
+  let queryBuilder = Company.find(filter).sort({ name: 1 });
+  if (limit && limit !== 'all' && Number(limit) > 0) {
+    queryBuilder = queryBuilder.limit(Number(limit));
+  }
+
+  const companies = await queryBuilder.lean();
+  const totalToProcess = companies.length;
+
+  if (totalToProcess === 0) {
+    return ApiResponse.error(
+      res,
+      `No companies found matching letter "${String(letter).toUpperCase()}" with ${onlyMissing ? 'missing' : 'selected'} logos`,
+      404
+    );
+  }
+
+  // Reset session
+  isLogoCancelled = false;
+  logoLogs = [];
+  activeLogoSession = {
+    isActive: true,
+    status: 'running',
+    letter: String(letter).toUpperCase(),
+    totalToProcess,
+    processedCount: 0,
+    foundWebpCount: 0,
+    foundOtherCount: 0,
+    skippedCount: 0,
+    failedCount: 0,
+    currentCompany: '',
+    startedAt: new Date(),
+    completedAt: null,
+  };
+
+  logLogo(
+    'info',
+    `⚡ Initialized Logo Search Automation for letter "${activeLogoSession.letter}" (${totalToProcess} companies to process, prioritize WebP: ${preferWebp ? 'YES' : 'NO'})`
+  );
+
+  // Return immediate response so HTTP request doesn't timeout
+  res.json({
+    success: true,
+    message: `Logo search automation started for ${totalToProcess} companies`,
+    data: {
+      started: true,
+      totalToProcess,
+      letter: activeLogoSession.letter,
+      limit,
+    },
+  });
+
+  // Run in background asynchronously
+  (async () => {
+    try {
+      for (let i = 0; i < companies.length; i++) {
+        if (isLogoCancelled) {
+          activeLogoSession.status = 'stopped';
+          logLogo('warning', '⚠️ Logo search automation was stopped by admin.');
+          break;
+        }
+
+        const comp = companies[i];
+        activeLogoSession.currentCompany = comp.name;
+        const progress = `[${i + 1}/${totalToProcess}]`;
+
+        logLogo('step', `${progress} 🔍 Searching logo for "${comp.name}" (slug: ${comp.slug})...`);
+
+        try {
+          const logoResult = await findCompanyLogo({
+            name: comp.name,
+            slug: comp.slug,
+            website: comp.website,
+            platform: comp.platform,
+            preferWebp,
+          });
+
+          if (logoResult && logoResult.url) {
+            // Update company in DB
+            await Company.findByIdAndUpdate(comp._id, {
+              $set: { logo: logoResult.url },
+            });
+
+            // Cascade to matching jobs
+            let updatedJobsCount = 0;
+            if (cascadeToJobs !== false) {
+              const jobRes = await Job.updateMany(
+                {
+                  $or: [
+                    { company: comp._id },
+                    { companyTag: comp.slug },
+                    { companyName: new RegExp('^' + comp.name + '$', 'i') },
+                  ],
+                },
+                { $set: { companyLogo: logoResult.url } }
+              );
+              updatedJobsCount = jobRes.modifiedCount || 0;
+            }
+
+            if (logoResult.format === 'webp') {
+              activeLogoSession.foundWebpCount++;
+            } else {
+              activeLogoSession.foundOtherCount++;
+            }
+
+            const jobsText = updatedJobsCount > 0 ? ` (Updated ${updatedJobsCount} job listings)` : '';
+            logLogo(
+              'success',
+              `${progress} ✅ Saved ${logoResult.format.toUpperCase()} logo for ${comp.name} via ${logoResult.source} -> ${logoResult.url}${jobsText}`
+            );
+          } else {
+            activeLogoSession.failedCount++;
+            logLogo('warning', `${progress} ⚠️ No logo could be found on the internet for ${comp.name}.`);
+          }
+        } catch (compErr) {
+          activeLogoSession.failedCount++;
+          logLogo('error', `${progress} ❌ Error finding logo for ${comp.name}: ${compErr.message}`);
+        }
+
+        activeLogoSession.processedCount = i + 1;
+
+        // Small delay between searches (300ms) for rate-limit protection
+        await new Promise((r) => setTimeout(r, 300));
+      }
+
+      if (!isLogoCancelled) {
+        activeLogoSession.status = 'completed';
+        activeLogoSession.completedAt = new Date();
+        logLogo(
+          'success',
+          `🎉 Logo Search Automation Completed! Total: ${totalToProcess}, WebP: ${activeLogoSession.foundWebpCount}, Other: ${activeLogoSession.foundOtherCount}, Failed: ${activeLogoSession.failedCount}`
+        );
+      }
+    } catch (err) {
+      activeLogoSession.status = 'failed';
+      logLogo('error', `💥 Fatal error in logo automation: ${err.message}`);
+    } finally {
+      activeLogoSession.isActive = false;
+    }
+  })().catch((err) => {
+    console.error('[LogoFinderAutomation] Unhandled error:', err);
+  });
+};
+
+// ── Admin: Get Logo Automation Status & Logs ─────────────────────────────────
+exports.getAutoLogoStatus = async (req, res) => {
+  return ApiResponse.success(res, {
+    state: activeLogoSession,
+    logs: logoLogs,
+  });
+};
+
+// ── Admin: Stop Auto-Logo Automation ─────────────────────────────────────────
+exports.stopAutoLogoFinder = async (req, res) => {
+  isLogoCancelled = true;
+  activeLogoSession.status = 'stopped';
+  activeLogoSession.isActive = false;
+  logLogo('warning', '🛑 Stop signal received. Halting logo automation...');
+  return ApiResponse.success(res, { stopped: true }, 'Logo automation stopping');
 };

@@ -26,6 +26,10 @@ export const companiesApi = {
   getSchedulerSettings: () => api.get('/companies/scheduler/settings'),
   updateSchedulerSettings: (data) => api.post('/companies/scheduler/settings', data),
   runSchedulerNow: () => api.post('/companies/scheduler/run-now'),
+  // Admin Auto-Logo Finder
+  startAutoLogos: (data) => api.post('/companies/admin/auto-logos', data),
+  getAutoLogoStatus: () => api.get('/companies/admin/auto-logos/status'),
+  stopAutoLogos: () => api.post('/companies/admin/auto-logos/stop'),
 };
 
 // ── Topics ────────────────────────────────────────────────────────────────────

@@ -13,6 +13,9 @@ const {
   getSchedulerSettings,
   updateSchedulerSettings,
   triggerAutoSyncNow,
+  startAutoLogoFinder,
+  getAutoLogoStatus,
+  stopAutoLogoFinder,
 } = require('../controllers/companyController');
 const { protect, adminOnly, optionalAuth } = require('../middleware/auth');
 
@@ -23,6 +26,11 @@ router.post('/toggle-autosync', protect, adminOnly, toggleAutoSync);
 router.get('/scheduler/settings', protect, adminOnly, getSchedulerSettings);
 router.post('/scheduler/settings', protect, adminOnly, updateSchedulerSettings);
 router.post('/scheduler/run-now', protect, adminOnly, triggerAutoSyncNow);
+
+// ── Admin: Automated Logo Search (WebP) ───────────────────────────────────────
+router.post('/admin/auto-logos', protect, adminOnly, startAutoLogoFinder);
+router.get('/admin/auto-logos/status', protect, adminOnly, getAutoLogoStatus);
+router.post('/admin/auto-logos/stop', protect, adminOnly, stopAutoLogoFinder);
 router.post('/:id/sync', protect, adminOnly, syncSingleCompany);
 router.patch('/:id', protect, adminOnly, updateCompanyInfo);
 

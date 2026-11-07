@@ -27,11 +27,13 @@ import {
   SlidersHorizontal,
   Terminal,
   Zap,
+  Sparkles,
 } from 'lucide-react';
 import { companiesApi, jobsApi } from '../../api';
 import toast from 'react-hot-toast';
 import Spinner from '../../components/common/Spinner';
 import LiveSyncTerminal from '../../components/jobs/LiveSyncTerminal';
+import AutoLogoFinderModal from '../../components/companies/AutoLogoFinderModal';
 
 const ALPHABET = ['All', '#', ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))];
 
@@ -135,6 +137,77 @@ export default function AdminCompanies() {
       if (intervalId) clearInterval(intervalId);
     };
   }, [isSyncing, terminalOpen, qc]);
+
+  // Auto-Logo Search state for Admin
+  const [logoModalOpen, setLogoModalOpen] = useState(false);
+  const [logoTerminalOpen, setLogoTerminalOpen] = useState(false);
+  const [logoSessionState, setLogoSessionState] = useState(null);
+  const [logoSessionLogs, setLogoSessionLogs] = useState([]);
+  const [logoSearching, setLogoSearching] = useState(false);
+  const [stoppingLogoSearch, setStoppingLogoSearch] = useState(false);
+
+  // Poll Auto-Logo status & live terminal logs
+  useEffect(() => {
+    let intervalId;
+    const pollLogoStatus = async () => {
+      try {
+        const res = await companiesApi.getAutoLogoStatus();
+        const data = res?.data?.data;
+        if (data) {
+          if (data.state) {
+            setLogoSessionState(data.state);
+            const active = Boolean(data.state.isActive);
+            setLogoSearching(active);
+            if (!active && logoSearching) {
+              qc.invalidateQueries(['admin-companies']);
+            }
+          }
+          if (Array.isArray(data.logs)) {
+            setLogoSessionLogs(data.logs);
+          }
+        }
+      } catch (e) {
+        // silent
+      }
+    };
+
+    if (logoSearching || logoTerminalOpen) {
+      pollLogoStatus();
+      intervalId = setInterval(pollLogoStatus, 1200);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [logoSearching, logoTerminalOpen, qc]);
+
+  const handleStartAutoLogos = async (filters) => {
+    try {
+      setLogoModalOpen(false);
+      setLogoSearching(true);
+      setLogoTerminalOpen(true);
+
+      const res = await companiesApi.startAutoLogos(filters);
+      toast.success(
+        res?.data?.message || 'Started automated logo search on the internet!',
+        { duration: 5000 }
+      );
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to start logo search');
+      setLogoSearching(false);
+    }
+  };
+
+  const handleStopAutoLogos = async () => {
+    setStoppingLogoSearch(true);
+    try {
+      await companiesApi.stopAutoLogos();
+      toast('Stopping logo automation...', { icon: '🛑' });
+    } catch (err) {
+      toast.error('Failed to stop logo automation');
+    } finally {
+      setStoppingLogoSearch(false);
+    }
+  };
 
   // Edit Modal
   const [editingCompany, setEditingCompany] = useState(null);
@@ -416,7 +489,7 @@ export default function AdminCompanies() {
 
   return (
     <div className="space-y-6">
-      {/* Live Terminal Modal */}
+      {/* Live Terminal Modal for ATS Scrape */}
       <LiveSyncTerminal
         isOpen={terminalOpen}
         onClose={() => setTerminalOpen(false)}
@@ -426,6 +499,34 @@ export default function AdminCompanies() {
         onStopSync={handleStopSync}
         stoppingSync={stoppingSync}
         title="global-ats-scraper@alloteme:~"
+      />
+
+      {/* Auto-Logo Search Terminal Modal */}
+      <LiveSyncTerminal
+        isOpen={logoTerminalOpen}
+        onClose={() => setLogoTerminalOpen(false)}
+        syncState={logoSessionState}
+        syncLogs={logoSessionLogs}
+        syncing={logoSearching}
+        onStopSync={handleStopAutoLogos}
+        stoppingSync={stoppingLogoSearch}
+        title="logo-crawler@alloteme:~"
+        badgeText={logoSessionState?.letter ? `LETTER: ${logoSessionState.letter}` : 'WEBP LOGOS'}
+        statCards={[
+          { label: 'Target Companies', value: logoSessionState?.totalToProcess || 0 },
+          { label: 'Processed', value: logoSessionState?.processedCount || 0, color: 'text-accent-blue' },
+          { label: 'WebP Logos Added', value: logoSessionState?.foundWebpCount || 0, color: 'text-accent-green' },
+          { label: 'Other Logos Added', value: logoSessionState?.foundOtherCount || 0, color: 'text-indigo-400' },
+          { label: 'Failed / Skipped', value: (logoSessionState?.failedCount || 0) + (logoSessionState?.skippedCount || 0), color: 'text-accent-red' },
+        ]}
+      />
+
+      {/* Auto-Logo Finder Filter Modal */}
+      <AutoLogoFinderModal
+        isOpen={logoModalOpen}
+        onClose={() => setLogoModalOpen(false)}
+        onStart={handleStartAutoLogos}
+        loading={logoSearching}
       />
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
@@ -443,6 +544,31 @@ export default function AdminCompanies() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setLogoModalOpen(true)}
+            disabled={logoSearching}
+            className="btn btn-sm px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 transition-all"
+            title="Automatically search the internet and add WebP logos for companies by letter"
+          >
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <span>Auto-Find Logos (WebP)</span>
+            {logoSearching && <span className="w-2 h-2 rounded-full bg-amber-300 animate-ping ml-1" />}
+          </button>
+
+          {logoSearching && (
+            <button
+              type="button"
+              onClick={() => setLogoTerminalOpen(true)}
+              className="btn btn-ghost btn-sm px-3 py-1.5 rounded-xl border border-emerald-500/40 text-xs font-mono flex items-center gap-1.5 cursor-pointer text-emerald-400 hover:text-emerald-300 bg-emerald-500/10"
+              title="Open Logo Crawler Terminal"
+            >
+              <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Logo Terminal</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {

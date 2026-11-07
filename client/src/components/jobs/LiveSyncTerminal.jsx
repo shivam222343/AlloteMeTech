@@ -11,6 +11,8 @@ export default function LiveSyncTerminal({
   onStopSync,
   stoppingSync,
   title = 'ats-scraper@alloteme:~',
+  statCards,
+  badgeText,
 }) {
   const terminalEndRef = useRef(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -82,7 +84,12 @@ export default function LiveSyncTerminal({
           </div>
 
           <div className="flex items-center justify-between sm:justify-end gap-2 flex-shrink-0">
-            {syncState?.category && (
+            {badgeText && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 bg-indigo-500/20 text-indigo-300 border-indigo-500/40">
+                {badgeText}
+              </span>
+            )}
+            {!badgeText && syncState?.category && (
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${
                 syncState.category === 'Non-Tech'
                   ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
@@ -117,44 +124,59 @@ export default function LiveSyncTerminal({
 
         {/* Live Counters */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-3 bg-[#111620] border-b border-border/40 text-xs font-mono">
-          <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
-            <div className="text-[10px] text-text-faint uppercase">Companies / Target</div>
-            <div className="text-sm font-bold text-text-primary mt-0.5">
-              {syncState?.totalToScrape || 0}
-            </div>
-          </div>
-          <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
-            <div className="text-[10px] text-text-faint uppercase">Processed</div>
-            <div className="text-sm font-bold text-accent-blue mt-0.5">
-              {syncState?.processedCount || 0}
-            </div>
-          </div>
-          <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
-            <div className="text-[10px] text-text-faint uppercase">Jobs Saved</div>
-            <div className="text-sm font-bold text-accent-green mt-0.5">
-              {syncState?.savedCount || 0}
-            </div>
-          </div>
-          <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
-            <div className="text-[10px] text-text-faint uppercase">Duplicates Skipped</div>
-            <div className="text-sm font-bold text-accent-yellow mt-0.5">
-              {syncState?.duplicateCount || 0}
-            </div>
-          </div>
-          <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
-            <div className="text-[10px] text-text-faint uppercase">Errors / Unreachable</div>
-            <div className="text-sm font-bold text-accent-red mt-0.5">
-              {syncState?.errorsCount || 0}
-            </div>
-          </div>
+          {Array.isArray(statCards) && statCards.length > 0 ? (
+            statCards.map((sc, idx) => (
+              <div key={idx} className="p-2 rounded-lg bg-[#18202d] border border-border/40">
+                <div className="text-[10px] text-text-faint uppercase">{sc.label}</div>
+                <div className={`text-sm font-bold mt-0.5 ${sc.color || 'text-text-primary'}`}>
+                  {sc.value ?? 0}
+                </div>
+              </div>
+            ))
+          ) : (
+            <>
+              <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
+                <div className="text-[10px] text-text-faint uppercase">Companies / Target</div>
+                <div className="text-sm font-bold text-text-primary mt-0.5">
+                  {syncState?.totalToScrape || 0}
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
+                <div className="text-[10px] text-text-faint uppercase">Processed</div>
+                <div className="text-sm font-bold text-accent-blue mt-0.5">
+                  {syncState?.processedCount || 0}
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
+                <div className="text-[10px] text-text-faint uppercase">Jobs Saved</div>
+                <div className="text-sm font-bold text-accent-green mt-0.5">
+                  {syncState?.savedCount || 0}
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
+                <div className="text-[10px] text-text-faint uppercase">Duplicates Skipped</div>
+                <div className="text-sm font-bold text-accent-yellow mt-0.5">
+                  {syncState?.duplicateCount || 0}
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-[#18202d] border border-border/40">
+                <div className="text-[10px] text-text-faint uppercase">Errors / Unreachable</div>
+                <div className="text-sm font-bold text-accent-red mt-0.5">
+                  {syncState?.errorsCount || 0}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Current status banner */}
-        {syncState?.currentStep && (
+        {(syncState?.currentStep || syncState?.currentCompany) && (
           <div className="px-4 py-2 bg-[#141b26] border-b border-border/40 flex items-center justify-between gap-3 text-xs font-mono">
             <div className="flex items-center gap-2 truncate text-accent-blue">
               <span className="w-2 h-2 rounded-full bg-accent-blue animate-ping" />
-              <span className="truncate">{syncState.currentStep}</span>
+              <span className="truncate">
+                {syncState.currentStep || `Processing "${syncState.currentCompany}"...`}
+              </span>
             </div>
             {syncing && onStopSync && (
               <button
