@@ -501,7 +501,14 @@ exports.getCompanyJobs = async (req, res) => {
 // ─── Admin: Sync Single Company ───────────────────────────────────────────────
 exports.syncSingleCompany = async (req, res) => {
   const { id } = req.params;
-  const { postedWithinDays = 'all', experienceFilter = 'all', categoryFilter = 'all' } = req.body;
+  const {
+    postedWithinDays = 'all',
+    experienceFilter = 'all',
+    categoryFilter = 'all',
+    country = 'all',
+    customLocations = '',
+    includeRemote = true,
+  } = req.body;
 
   let company = null;
   if (mongoose.Types.ObjectId.isValid(id)) {
@@ -520,6 +527,9 @@ exports.syncSingleCompany = async (req, res) => {
       postedWithinDays,
       experienceFilter,
       categoryFilter,
+      country,
+      customLocations,
+      includeRemote,
     });
 
     return ApiResponse.success(res, result, `Synced ${result.saved} new jobs for ${company.name}`);
@@ -535,6 +545,9 @@ exports.globalSync = async (req, res) => {
     postedWithinDays = '2',
     experienceFilter = '0_1',
     categoryFilter = 'Tech',
+    country = 'all',
+    customLocations = '',
+    includeRemote = true,
     syncAll = false,
   } = req.body;
 
@@ -561,23 +574,26 @@ exports.globalSync = async (req, res) => {
     return ApiResponse.badRequest(res, 'A scrape session is already in progress. Please wait or stop it first.');
   }
 
+  const locLabel = country && country !== 'all' ? `Location: ${country.toUpperCase()}` : 'Location: Worldwide';
+
   // Initialize scraper terminal session
   resetSyncSession({
     isActive: true,
     status: 'running',
     mode: 'ats_global',
     category: categoryFilter,
+    country: country || 'all',
     totalToScrape: targets.length,
     processedCount: 0,
     savedCount: 0,
     duplicateCount: 0,
     errorsCount: 0,
-    currentStep: `Starting Global ATS Scraper for ${targets.length} companies [0-1 Yrs Exp | Last 2 Days]...`,
-    message: `Initialized Global ATS Scrape`,
+    currentStep: `Starting Global ATS Scraper for ${targets.length} companies [0-1 Yrs Exp | Last 2 Days | ${locLabel}]...`,
+    message: `Initialized Global ATS Scrape (${locLabel})`,
   });
 
   logScraper(
-    `=== STARTING GLOBAL ATS SCRAPER [${targets.length} Companies | Exp: 0-1 Yrs | Range: Last 2 Days | Category: ${categoryFilter}] ===`,
+    `=== STARTING GLOBAL ATS SCRAPER [${targets.length} Companies | Exp: 0-1 Yrs | Range: Last 2 Days | Category: ${categoryFilter} | ${locLabel}] ===`,
     'step',
     { isActive: true, status: 'running' }
   );
@@ -588,9 +604,9 @@ exports.globalSync = async (req, res) => {
     {
       started: true,
       totalCompanies: targets.length,
-      filters: { postedWithinDays, experienceFilter, categoryFilter },
+      filters: { postedWithinDays, experienceFilter, categoryFilter, country, customLocations, includeRemote },
     },
-    `Global ATS scrape started for ${targets.length} companies`
+    `Global ATS scrape started for ${targets.length} companies (${locLabel})`
   );
 
   // Run in background asynchronously with live terminal logging
@@ -624,6 +640,9 @@ exports.globalSync = async (req, res) => {
           postedWithinDays,
           experienceFilter,
           categoryFilter,
+          country,
+          customLocations,
+          includeRemote,
         });
 
         totalSaved += syncRes.saved;

@@ -299,6 +299,115 @@ function filterByExperience(title = '', description = '', experienceFilter = 'al
   return true;
 }
 
+// ── Country / Location Reference Map ──────────────────────────────────────────
+const COUNTRY_MAP = {
+  india: {
+    names: ['india', 'bharat'],
+    cities: [
+      'bengaluru', 'bangalore', 'hyderabad', 'pune', 'mumbai', 'delhi', 'new delhi',
+      'noida', 'gurgaon', 'gurugram', 'chennai', 'kolkata', 'ahmedabad', 'kochi',
+      'cochin', 'indore', 'jaipur', 'chandigarh', 'mysore', 'mysuru', 'trivandrum',
+      'thiruvananthapuram', 'coimbatore', 'bhubaneswar', 'nagpur', 'vadodara', 'surat',
+      'visakhapatnam', 'lucknow', 'kanpur', 'andhra pradesh', 'telangana', 'karnataka',
+      'maharashtra', 'tamil nadu', 'gujarat', 'uttar pradesh', 'haryana', 'kerala'
+    ],
+  },
+  us: {
+    names: ['united states', 'usa', 'u.s.a.', 'u.s.'],
+    stateCodes: [
+      'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL',
+      'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT',
+      'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI',
+      'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+    ],
+    cities: [
+      'san francisco', 'new york', 'nyc', 'seattle', 'austin', 'chicago', 'los angeles',
+      'boston', 'denver', 'atlanta', 'san jose', 'sunnyvale', 'mountain view', 'palo alto',
+      'san diego', 'dallas', 'houston', 'miami', 'phoenix', 'philadelphia', 'portland',
+      'washington dc', 'salt lake city', 'minneapolis', 'raleigh', 'charlotte', 'california',
+      'texas', 'washington', 'colorado', 'massachusetts', 'illinois'
+    ],
+  },
+  uk: {
+    names: ['united kingdom', 'great britain', 'england', 'scotland', 'wales', 'northern ireland'],
+    cities: ['london', 'manchester', 'birmingham', 'edinburgh', 'glasgow', 'bristol', 'cambridge', 'oxford', 'leeds', 'liverpool', 'belfast', 'sheffield'],
+  },
+  canada: {
+    names: ['canada'],
+    stateCodes: ['ON', 'QC', 'BC', 'AB', 'MB', 'SK', 'NS', 'NB'],
+    cities: ['toronto', 'vancouver', 'montreal', 'ottawa', 'calgary', 'edmonton', 'waterloo', 'halifax', 'ontario', 'quebec', 'british columbia', 'alberta'],
+  },
+  germany: {
+    names: ['germany', 'deutschland'],
+    cities: ['berlin', 'munich', 'münchen', 'frankfurt', 'hamburg', 'cologne', 'köln', 'stuttgart', 'düsseldorf', 'leipzig'],
+  },
+};
+
+// Helper: Filter by Location / Country
+function filterByLocation(jobLocation = '', jobWorkMode = '', selectedCountry = 'all', customLocations = '', includeRemote = true) {
+  if (!selectedCountry || selectedCountry === 'all' || selectedCountry === 'worldwide') {
+    return true;
+  }
+
+  const loc = (jobLocation || '').trim();
+  const locLower = loc.toLowerCase();
+  const isJobRemote = jobWorkMode === 'Remote' || /\bremote\b|\banywhere\b|\bwfh\b/i.test(loc);
+
+  // If user selected "remote_only"
+  if (selectedCountry === 'remote' || selectedCountry === 'remote_only') {
+    return isJobRemote;
+  }
+
+  // If includeRemote is enabled and job is completely global remote without country restriction
+  if (includeRemote && (locLower === 'remote' || locLower === 'remote / worldwide' || locLower === 'work from anywhere')) {
+    return true;
+  }
+
+  // Check preset country
+  const presetKey = selectedCountry.toLowerCase().replace(/[^a-z]/g, '');
+  const preset =
+    COUNTRY_MAP[presetKey] ||
+    (selectedCountry.toLowerCase() === 'united states' ? COUNTRY_MAP.us : null) ||
+    (selectedCountry.toLowerCase() === 'united kingdom' ? COUNTRY_MAP.uk : null);
+
+  if (preset) {
+    // 1. Check country names
+    for (const name of preset.names) {
+      const regex = new RegExp(`\\b${name}\\b`, 'i');
+      if (regex.test(locLower)) return true;
+    }
+
+    // 2. Check cities / states
+    if (preset.cities) {
+      for (const city of preset.cities) {
+        const regex = new RegExp(`\\b${city}\\b`, 'i');
+        if (regex.test(locLower)) return true;
+      }
+    }
+
+    // 3. Check US / Canada state codes e.g. ", CA", " - NY", "/ TX"
+    if (preset.stateCodes) {
+      const codePattern = new RegExp(`(?:,|\\/|\\-|\\s)\\s*(${preset.stateCodes.join('|')})(?:\\s|;|,|\\/|$|\\d)`, 'i');
+      if (codePattern.test(loc)) return true;
+    }
+  }
+
+  // Check custom locations if provided (comma-separated e.g. "Singapore, Sydney, Tokyo")
+  if (customLocations && typeof customLocations === 'string') {
+    const customList = customLocations.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    for (const cl of customList) {
+      if (locLower.includes(cl)) return true;
+    }
+  }
+
+  // Also check if selectedCountry was a custom string not in preset
+  if (!preset && selectedCountry !== 'custom') {
+    if (locLower.includes(selectedCountry.toLowerCase())) return true;
+  }
+
+  return false;
+}
+
 // ── Platform-specific Parsers ──────────────────────────────────────────────────
 
 // 1. Greenhouse
@@ -570,6 +679,9 @@ async function syncJobsForCompany(companyIdOrDoc, options = {}) {
   const postedWithinDays = options.postedWithinDays !== undefined ? options.postedWithinDays : 'all';
   const experienceFilter = options.experienceFilter || options.experience || 'all';
   const categoryFilter = options.categoryFilter || options.category || 'all';
+  const country = options.country || options.locationFilter || 'all';
+  const customLocations = options.customLocations || '';
+  const includeRemote = options.includeRemote !== undefined ? Boolean(options.includeRemote) : true;
   const limit = options.limit || 200;
 
   let company = companyIdOrDoc;
@@ -630,6 +742,12 @@ async function syncJobsForCompany(companyIdOrDoc, options = {}) {
       // Classify Category: Tech vs Non-Tech
       const detectedCategory = classifyCategory(rawJob.title, rawJob.department, jobDesc);
       if (categoryFilter !== 'all' && detectedCategory !== categoryFilter) {
+        filteredOutCount++;
+        continue;
+      }
+
+      // Filter: Country / Location (Strict)
+      if (!filterByLocation(rawJob.location, rawJob.workMode, country, customLocations, includeRemote)) {
         filteredOutCount++;
         continue;
       }
@@ -786,4 +904,6 @@ module.exports = {
   globalSyncCompanies,
   classifyCategory,
   filterByExperience,
+  filterByLocation,
+  COUNTRY_MAP,
 };

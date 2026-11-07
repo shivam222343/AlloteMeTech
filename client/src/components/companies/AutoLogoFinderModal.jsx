@@ -207,3 +207,4 @@ export default function AutoLogoFinderModal({ isOpen, onClose, onStart, loading 
     </div>
   );
 }
+

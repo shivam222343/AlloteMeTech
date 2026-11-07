@@ -71,6 +71,17 @@ const CATEGORY_OPTIONS = [
   { value: 'Non-Tech', label: 'Non-Tech Only 💼' },
 ];
 
+const COUNTRY_OPTIONS = [
+  { value: 'all', label: '🌐 All / Worldwide (No restriction)' },
+  { value: 'india', label: '🇮🇳 India (Bengaluru, Pune, Hyderabad, Delhi, etc.)' },
+  { value: 'us', label: '🇺🇸 United States (SF, NY, Austin, Seattle, etc.)' },
+  { value: 'uk', label: '🇬🇧 United Kingdom (London, Manchester, etc.)' },
+  { value: 'canada', label: '🇨🇦 Canada (Toronto, Vancouver, etc.)' },
+  { value: 'germany', label: '🇩🇪 Germany (Berlin, Munich, etc.)' },
+  { value: 'remote', label: '🏠 Remote Only (Telecommute / WFH)' },
+  { value: 'custom', label: '✏️ Custom Location Keywords...' },
+];
+
 export default function AdminCompanies() {
   const qc = useQueryClient();
 
@@ -100,6 +111,9 @@ export default function AdminCompanies() {
     postedWithinDays: '2',
     experienceFilter: 'all',
     categoryFilter: 'all',
+    country: 'all',
+    customLocations: '',
+    includeRemote: true,
   });
   const [isSyncing, setIsSyncing] = useState(false);
   const [globalProgress, setGlobalProgress] = useState(null);
@@ -572,11 +586,12 @@ export default function AdminCompanies() {
           <button
             type="button"
             onClick={() => {
-              setSyncOptions({
+              setSyncOptions((prev) => ({
+                ...prev,
                 postedWithinDays: '2',
                 experienceFilter: '0_1',
                 categoryFilter: 'Tech',
-              });
+              }));
               setSyncModalTarget('global');
             }}
             disabled={isSyncing}
@@ -1181,6 +1196,67 @@ export default function AdminCompanies() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Requirement 4: Country & Location Filter (Strict) */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-text-primary">
+                    🌍 Target Country / Location:
+                  </label>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-accent-blue/15 text-accent-blue font-bold uppercase border border-accent-blue/30">
+                    {syncOptions.country === 'all' ? 'Worldwide' : (syncOptions.country || 'all').toUpperCase()}
+                  </span>
+                </div>
+                <select
+                  disabled={isSyncing}
+                  value={syncOptions.country || 'all'}
+                  onChange={(e) =>
+                    setSyncOptions((o) => ({ ...o, country: e.target.value }))
+                  }
+                  className="input w-full text-xs"
+                >
+                  {COUNTRY_OPTIONS.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+
+                {syncOptions.country === 'custom' && (
+                  <div className="pt-1 space-y-1">
+                    <input
+                      type="text"
+                      disabled={isSyncing}
+                      value={syncOptions.customLocations || ''}
+                      onChange={(e) =>
+                        setSyncOptions((o) => ({ ...o, customLocations: e.target.value }))
+                      }
+                      placeholder="e.g. Singapore, Australia, Dubai, Tokyo, Amsterdam"
+                      className="input w-full text-xs py-1.5"
+                    />
+                    <p className="text-[10px] text-text-faint">
+                      Comma-separated cities/countries. Only jobs matching these keywords will be scraped.
+                    </p>
+                  </div>
+                )}
+
+                {syncOptions.country !== 'all' && syncOptions.country !== 'remote' && (
+                  <label className="flex items-center gap-2 pt-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      disabled={isSyncing}
+                      checked={syncOptions.includeRemote !== false}
+                      onChange={(e) =>
+                        setSyncOptions((o) => ({ ...o, includeRemote: e.target.checked }))
+                      }
+                      className="rounded border-border text-accent-blue focus:ring-accent-blue"
+                    />
+                    <span className="text-[11px] text-text-muted">
+                      Include global remote positions (alongside {syncOptions.country === 'custom' ? 'custom locations' : (syncOptions.country || '').toUpperCase()})
+                    </span>
+                  </label>
+                )}
               </div>
 
               {/* Progress Indicator for Global Sync */}

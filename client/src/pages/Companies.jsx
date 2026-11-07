@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
+  Globe,
 } from 'lucide-react';
 import Spinner from '../components/common/Spinner';
 import { formatRelativeTime } from '../utils/helpers';
@@ -27,6 +28,17 @@ const SORT_OPTIONS = [
   { value: 'name', label: 'Alphabetical' },
   { value: 'questions', label: 'Most Qs' },
   { value: 'newest', label: 'Recent' },
+];
+
+const COUNTRY_OPTIONS = [
+  { value: 'all', label: '🌐 All / Worldwide (No restriction)' },
+  { value: 'india', label: '🇮🇳 India (Bengaluru, Pune, Hyderabad, Delhi, etc.)' },
+  { value: 'us', label: '🇺🇸 United States (SF, NY, Austin, Seattle, etc.)' },
+  { value: 'uk', label: '🇬🇧 United Kingdom (London, Manchester, etc.)' },
+  { value: 'canada', label: '🇨🇦 Canada (Toronto, Vancouver, etc.)' },
+  { value: 'germany', label: '🇩🇪 Germany (Berlin, Munich, etc.)' },
+  { value: 'remote', label: '🏠 Remote Only (Telecommute / WFH)' },
+  { value: 'custom', label: '✏️ Custom Location Keywords...' },
 ];
 
 const ALPHABET = ['#', ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))];
@@ -92,6 +104,9 @@ const Companies = () => {
   const [stoppingSync, setStoppingSync] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [categoryChoice, setCategoryChoice] = useState('Tech');
+  const [countryChoice, setCountryChoice] = useState('all');
+  const [customLocationsChoice, setCustomLocationsChoice] = useState('');
+  const [includeRemoteChoice, setIncludeRemoteChoice] = useState(true);
 
   // Auto-Logo Search state for Admin
   const [logoModalOpen, setLogoModalOpen] = useState(false);
@@ -180,6 +195,9 @@ const Companies = () => {
         postedWithinDays: '2',
         experienceFilter: '0_1',
         categoryFilter: categoryChoice,
+        country: countryChoice,
+        customLocations: customLocationsChoice,
+        includeRemote: includeRemoteChoice,
       });
 
       toast.success(
@@ -349,6 +367,60 @@ const Companies = () => {
                     All Roles
                   </button>
                 </div>
+              </div>
+
+              {/* Requirement: Country & Location Filter */}
+              <div className="space-y-1.5 pt-2 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-text-secondary flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-accent-blue" />
+                    Target Country / Locations:
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-accent-blue/15 text-accent-blue font-bold uppercase border border-accent-blue/30">
+                    {countryChoice === 'all' ? 'Worldwide' : countryChoice.toUpperCase()}
+                  </span>
+                </div>
+
+                <select
+                  value={countryChoice}
+                  onChange={(e) => setCountryChoice(e.target.value)}
+                  className="input w-full text-xs py-1.5"
+                >
+                  {COUNTRY_OPTIONS.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+
+                {countryChoice === 'custom' && (
+                  <div className="pt-1 space-y-1">
+                    <input
+                      type="text"
+                      value={customLocationsChoice}
+                      onChange={(e) => setCustomLocationsChoice(e.target.value)}
+                      placeholder="e.g. Singapore, Australia, Dubai, Tokyo, Amsterdam"
+                      className="input w-full text-xs py-1.5"
+                    />
+                    <p className="text-[10px] text-text-faint">
+                      Enter comma-separated cities or countries. Only jobs matching these keywords will be scraped.
+                    </p>
+                  </div>
+                )}
+
+                {countryChoice !== 'all' && countryChoice !== 'remote' && (
+                  <label className="flex items-center gap-2 pt-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeRemoteChoice}
+                      onChange={(e) => setIncludeRemoteChoice(e.target.checked)}
+                      className="rounded border-border text-accent-blue focus:ring-accent-blue"
+                    />
+                    <span className="text-[11px] text-text-muted">
+                      Include global remote positions (alongside {countryChoice === 'custom' ? 'custom locations' : countryChoice.toUpperCase()})
+                    </span>
+                  </label>
+                )}
               </div>
             </div>
 
